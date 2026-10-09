@@ -13,6 +13,8 @@ funkciói még nincsenek megvalósítva.
 - Frontend függőségek telepítve, a build ellenőrizve.
 - Az alkalmazás helyben elindul.
 - Git-verziókövetés és GitHub-kapcsolat beállítva.
+- Bootstrap 5 bekötve Vite-on keresztül.
+- Közös Blade layout és teszt kezdőoldal.
 
 ## Technológiák
 
@@ -21,10 +23,11 @@ funkciói még nincsenek megvalósítva.
 - SQLite
 - Node.js 24 LTS és npm
 - Vite
+- Blade
+- Bootstrap 5
 
 Tervezett kiegészítések:
 
-- Blade és Bootstrap felület
 - Laravel Fortify hitelesítés
 - Google-belépés Laravel Socialite használatával
 - Mailpit a fejlesztés közbeni emailteszteléshez
