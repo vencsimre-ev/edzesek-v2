@@ -48,6 +48,9 @@ class AuthenticationTest extends TestCase
         ])->assertRedirect('/home');
 
         $user = User::sole();
+        $this->assertNotNull($user->created_at);
+        $this->assertNotNull($user->updated_at);
+        $this->assertTrue($user->created_at->equalTo($user->updated_at));
         $this->assertSame(Role::Student, $user->role);
         $this->assertSame(ApprovalStatus::Pending, $user->approval_status);
         $this->assertNull($user->email_verified_at);
@@ -176,16 +179,26 @@ class AuthenticationTest extends TestCase
     {
         $admin = User::factory()->admin()->create();
         $student = User::factory()->create();
+        $createdAt = $student->created_at;
+        $originalUpdatedAt = $student->updated_at;
+        $this->travel(1)->minutes();
         $this->actingAs($admin)->patch('/admin/approvals/'.$student->id)->assertRedirect(route('admin.approvals.index'));
         $student->refresh();
         $this->assertSame(ApprovalStatus::Approved, $student->approval_status);
         $this->assertSame($admin->id, $student->approved_by);
         $this->assertNotNull($student->approved_at);
         $approvedAt = $student->approved_at;
+        $updatedAt = $student->updated_at;
+        $this->assertTrue($createdAt->equalTo($student->created_at));
+        $this->assertTrue($updatedAt->greaterThan($originalUpdatedAt));
+        $this->assertTrue($approvedAt->equalTo($updatedAt));
         Notification::assertSentTo($student, AccountApproved::class);
         $this->travel(1)->hours();
         $this->patch('/admin/approvals/'.$student->id)->assertRedirect();
-        $this->assertTrue($approvedAt->equalTo($student->fresh()->approved_at));
+        $student->refresh();
+        $this->assertTrue($approvedAt->equalTo($student->approved_at));
+        $this->assertTrue($createdAt->equalTo($student->created_at));
+        $this->assertTrue($updatedAt->equalTo($student->updated_at));
         Notification::assertSentToTimes($student, AccountApproved::class, 1);
     }
 
@@ -303,6 +316,9 @@ class AuthenticationTest extends TestCase
             ->expectsQuestion('Jelszó megerősítése', 'admin-test-password')
             ->assertSuccessful();
         $admin = User::sole();
+        $this->assertNotNull($admin->created_at);
+        $this->assertNotNull($admin->updated_at);
+        $this->assertTrue($admin->created_at->equalTo($admin->updated_at));
         $this->assertTrue($admin->isAdmin());
         $this->assertTrue($admin->isApproved());
         $this->assertTrue($admin->hasVerifiedEmail());

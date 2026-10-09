@@ -179,6 +179,11 @@ Az admin adatait te adod meg; a megvalósítás nem hozott létre helyi admint.
 
 A nyilvános kezdőlap minden állapotban elérhető. A PHP backed enumok:
 `Role` (`admin`, `student`) és `ApprovalStatus` (`pending`, `approved`).
+A `users` tábla `created_at` és `updated_at` időbélyegeit az Eloquent
+automatikusan kezeli regisztrációkor és adminlétrehozáskor is. Jóváhagyáskor
+a `created_at` megmarad, az `updated_at` frissül; ismételt jóváhagyáskor
+egyik időbélyeg sem változik.
+
 A regisztráció mindig `student` + `pending`, és nem fogad el szerepet,
 jóváhagyási vagy email-megerősítési adatot a kliensből.
 
