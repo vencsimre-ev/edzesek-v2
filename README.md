@@ -18,6 +18,8 @@ Az edzéskezelési funkciók később készülnek el.
 - Laravel Fortify: regisztráció, belépés, Remember me, POST kijelentkezés,
   email-megerősítés és újraküldés, elfelejtett jelszó és visszaállítás.
 - Admin jóváhagyási lista, jogosultságvédelem és emailes értesítések.
+- Google-regisztráció és belépés Socialite-tal, explicit fiók-összekapcsolás.
+- Sanctum session alapú REST API: saját állapot, adminlista és jóváhagyás.
 - Interaktív adminlétrehozó parancs és auth feature tesztek.
 
 ## Technológiák
@@ -30,11 +32,8 @@ Az edzéskezelési funkciók később készülnek el.
 - Blade
 - Bootstrap 5
 - Laravel Fortify
+- Laravel Socialite és Sanctum
 - Mailpit a helyi emailteszteléshez
-
-Tervezett kiegészítések:
-
-- Google-belépés Laravel Socialite használatával
 
 ## Helyi telepítés
 
@@ -235,7 +234,205 @@ Kézi böngészős ellenőrzés a helyi szerver és Mailpit mellett:
 6. Hibás vagy lejárt megerősítő link ne legyen elfogadható; már jóváhagyott
    fiók ismételt jóváhagyása ne küldjön második levelet.
 
-A Google-belépés és az edzéskezelés még nincs megvalósítva.
+Az edzéskezelés még nincs megvalósítva. A Google-folyamat kézi ellenőrzése
+a következő szakaszban olvasható.
+
+## Google-regisztráció és belépés
+
+A Google OAuth session alapú webfolyamat, Socialite state-ellenőrzéssel.
+Új fiókhoz a Google által megerősített emailcím szükséges. A fiók
+`student` + `pending` állapotot kap, kitöltött `email_verified_at` mezővel;
+az adminnak ugyanaz az értesítés megy, mint normál email-megerősítéskor.
+Az alkalmazás eléréséhez továbbra is admin jóváhagyás kell.
+
+A `users.google_id` egyedi, nullable Google-azonosító. Az összekapcsolás
+üzleti szabályai az `AuthenticateWithGoogle` actionben vannak. Google
+access/refresh tokent nem tárolunk. A már összekapcsolt fiókot a Google
+stabil azonosítója alapján ismerjük fel; helyi nevét, emailcímét, szerepét
+és jóváhagyását belépéskor nem írjuk felül.
+
+Email-egyezés alapján nincs automatikus összekapcsolás vagy belépés.
+Meglévő fióknál előbb a saját jelszóval kell belépni és megerősíteni
+az emailcímet, majd a kezdőoldalon vagy a pending oldalon megnyomni a
+**Google-fiók összekapcsolása** gombot. Ez CSRF-védett POST műveletből
+indul. A Google és a helyi emailcímnek egyeznie kell, másik fiókhoz tartozó
+Google-azonosító nem használható, meglévő kapcsolat nem cserélhető le.
+A callbacknek ugyanahhoz a bejelentkezett sessionhöz kell visszatérnie.
+
+Új Google-fiók helyi jelszava egy ismeretlen, véletlen érték hash-e.
+Az elfelejtett jelszó folyamatával később helyi jelszó állítható be.
+Google-belépéskor nincs automatikus Remember me bekapcsolás.
+
+### Helyi Google-beállítás
+
+A Google Cloud Console-ban hozz létre OAuth **Web application** klienst,
+állítsd be a consent screent, és szükség esetén add hozzá a tesztfelhasználókat.
+Engedélyezett redirect URI pontosan:
+
+```text
+http://127.0.0.1:8000/auth/google/callback
+```
+
+A `.env` fájlban add meg a saját értékeidet; ne kerüljenek Gitbe:
+
+```dotenv
+GOOGLE_CLIENT_ID=<saját kliensazonosító>
+GOOGLE_CLIENT_SECRET=<saját kliens titka>
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
+SANCTUM_STATEFUL_DOMAINS=127.0.0.1:8000,localhost:8000
+```
+
+Ezután `php artisan config:clear`. Hiányzó Google-konfigurációval a
+Google-gomb rejtett, a Google-route-ok 503-at adnak. A `.env.example`
+nem tartalmaz valódi Google-adatokat. A production callback és stateful
+host a tényleges HTTPS-es alkalmazáscímhez igazodjon.
+
+| Web endpoint | Működés |
+| --- | --- |
+| GET `/auth/google/redirect` | Vendég Google-belépés/regisztráció indítása |
+| POST `/auth/google/link` | Belépett, verified fiók explicit összekapcsolása |
+| GET `/auth/google/callback` | OAuth callback, session/state ellenőrzéssel |
+
+Kézi ellenőrzés saját Google-konfigurációval:
+
+1. Új Google-emaillel regisztrálj; a pending oldalra kerülj, az admin
+   kapjon értesítést. Jóváhagyás után a következő Google-belépés érje el a `/home` oldalt.
+2. Meglévő helyi emaillel próbálj Google-belépést: ne lépjen be automatikusan.
+   Jelszavas belépés után kapcsold össze a fiókot, majd kijelentkezés után
+   ellenőrizd a Google-belépést.
+3. Másik emailcímű Google-fiókkal az összekapcsolás hibázzon; a helyi
+   szerep és jóváhagyás maradjon változatlan. Próbáld ki a Google-hozzájárulás
+   megszakítását is: magyar hibajelzés után újra indítható legyen a folyamat.
+
+## REST API és backend szerkezet
+
+Az [appointment-api referencia](https://github.com/vencsimre-ev/appointment-api)
+Requests, Resources, Controllers, Services, Enums és `routes/api.php`
+fájljait megvizsgáltuk. Az elkülönített rétegeket, explicit resource mezőket,
+enumértékeket és erőforrás/üzleti művelet route-okat vettük át.
+A referencia általános válaszburkolóját és üzleti szabályait nem másoltuk.
+
+- `Controllers/Web`: Blade és redirect; `Controllers/Api/V1`: JSON resource.
+- `Requests`: saját kérésvalidáció és policy alapú engedélyezés.
+- `Resources/UserResource`: kizárólag explicit válaszmezők; dátumok ISO 8601 UTC-ben.
+- `Actions`: közös jóváhagyás, Google-fiókkezelés és felhasználólista.
+- `Services/GoogleAuthentication`: OAuth/session folyamat.
+- `Policies/UserPolicy`: saját állapot és admin-műveletek engedélyezése.
+- `routes/api.php`: `/api/v1`, admin erőforrásnál `apiResource(...)->only('index')`.
+
+A Blade közvetlenül a web controllereken keresztül hívja a közös actionöket;
+nem kérdez HTTP-n az alkalmazás saját API-jától. Nincs teljes user CRUD,
+repository-réteg, univerzális response-wrapper, JWT vagy személyes API-token.
+
+### API-hitelesítés
+
+Sanctum `statefulApi()` middleware és `auth:sanctum` guard használatos,
+a Fortify meglévő `web` sessionjével. Tokenes hitelesítés kikapcsolt.
+A stateful kérés `Origin` vagy `Referer` hostja szerepeljen a
+`SANCTUM_STATEFUL_DOMAINS` listában, porttal együtt. A saját böngészős
+kliens ugyanarról az originről hívja az API-t, küldje a cookie-kat,
+és kérjen JSON-t: `Accept: application/json`.
+
+Belépés előtt GET `/sanctum/csrf-cookie`, majd a Fortify POST `/login`
+hívása szükséges, vagy a meglévő Blade/Google-belépés használható.
+Az URL-dekódolt `XSRF-TOKEN` cookie értékét minden állapotmódosító
+kérésnél küldd `X-XSRF-TOKEN` headerben. A session/CSRF cookie-kat a
+Laravel kezeli; a védett API nem mentesül a CSRF-ellenőrzés alól.
+Külön originről futó frontendhez később külön CORS-konfiguráció kell;
+a jelenlegi megoldás az alkalmazás saját originjét célozza.
+
+### Endpointok
+
+| Endpoint | Jogosultság | Sikeres válasz |
+| --- | --- | --- |
+| GET `/api/v1/me` | Belépett; pending és nem verified is | 200, `data`: UserResource |
+| GET `/api/v1/admin/users` | Verified + approved + admin | 200, lapozott resource collection |
+| PATCH `/api/v1/admin/users/{user}/approve` | Verified + approved + admin | 200, `data`: UserResource |
+
+Listaszűrés: `approval_status=pending` vagy `approved`. A pending listába
+csak verified felhasználók kerülnek. Szűrő nélkül az admin minden fiókot
+láthat. `per_page`: 1–100, alapérték 20; `page`: pozitív egész.
+A lapozási linkek megőrzik a validált szűrőt és az oldalméretet.
+
+Böngészőkonzolból, már belépett admin sessionjével:
+
+```javascript
+await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin' });
+const xsrf = () => decodeURIComponent(
+    document.cookie.split('; ').find(value => value.startsWith('XSRF-TOKEN=')).slice('XSRF-TOKEN='.length)
+);
+const me = await fetch('/api/v1/me', {
+    credentials: 'same-origin', headers: { Accept: 'application/json' }
+}).then(response => response.json());
+const users = await fetch('/api/v1/admin/users?approval_status=pending&per_page=20', {
+    credentials: 'same-origin', headers: { Accept: 'application/json' }
+}).then(response => response.json());
+// A listából választott, megerősített pending felhasználó azonosítója.
+const userId = users.data[0].id;
+const approved = await fetch(`/api/v1/admin/users/${userId}/approve`, {
+    method: 'PATCH', credentials: 'same-origin',
+    headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() }
+}).then(response => response.json());
+```
+
+Példa `GET /api/v1/me` válaszra, kizárólag kitalált adatokkal:
+
+```json
+{
+  "data": {
+    "id": 2,
+    "name": "Minta Tanuló",
+    "email": "student@example.test",
+    "role": "student",
+    "approval_status": "pending",
+    "email_verified_at": "2026-10-12T10:00:00.000000Z",
+    "approved_at": null,
+    "approved_by": null,
+    "created_at": "2026-10-12T10:00:00.000000Z",
+    "updated_at": "2026-10-12T10:00:00.000000Z"
+  }
+}
+```
+
+A lista válasza `data` tömb, `links` és `meta` (például `current_page`,
+`per_page`, `total`). A jóváhagyási PATCH kérésnek nincs kötelező törzse;
+a szerver választja ki a jóváhagyót és az állapotot. A válaszban
+`approval_status` értéke `approved`, az `approved_at`, `approved_by` és
+`updated_at` frissített. Ismételt web/API jóváhagyás is 200-as API-választ
+ad, és nem módosítja az adatokat vagy küld újabb értesítést.
+Jelszó, remember token, Google-azonosító és OAuth-token egyik resource-ban sem szerepel.
+
+| Hibakód | Jelentés |
+| --- | --- |
+| 401 | Nincs érvényes belépett session |
+| 403 | Hiányzó email-megerősítés, jóváhagyás vagy admin jogosultság |
+| 404 | Nem létező felhasználó vagy endpoint |
+| 422 | Hibás szűrő/lapozás, vagy nem megerősített célfiók jóváhagyása |
+| 419 | Hiányzó/hibás CSRF-token vagy lejárt session |
+
+Az API hibák `message` mezős JSON-válaszok, 422-nél `errors` mezővel is;
+`Accept` header hiányában sem adnak HTML-t vagy login redirectet.
+A jóváhagyás idempotens, ezért az ismétléshez nem használunk 409-et.
+Példa hibás szűrőre:
+
+```json
+{
+  "message": "A(z) jóváhagyási állapot értéke érvénytelen.",
+  "errors": { "approval_status": ["A(z) jóváhagyási állapot értéke érvénytelen."] }
+}
+```
+
+Az API- és Google-feature tesztek fake értesítésekkel, fake Google-adatokkal
+és külön `:memory:` adatbázissal futnak. A valódi session-cookie hitelesítést,
+CSRF-védelmet, JSON-hibákat, mezők kizárását és a közös jóváhagyás
+idempotenciáját is ellenőrzik. A Google-tesztek nem igényelnek valódi
+kliensazonosítót vagy titkot. Valódi Google-hozzájárulás és böngészős
+végigkattintás csak saját OAuth-konfigurációval ellenőrizhető kézzel.
+
+Hivatalos dokumentáció:
+[Laravel 13 Sanctum](https://laravel.com/framework/docs/13.x/sanctum),
+[Laravel 13 Socialite](https://laravel.com/framework/docs/13.x/socialite),
+[Google OAuth webalkalmazás-beállítás](https://developers.google.com/identity/protocols/oauth2/web-server).
 
 ## Adatok és titkos konfiguráció
 
