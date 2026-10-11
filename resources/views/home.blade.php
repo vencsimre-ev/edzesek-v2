@@ -6,4 +6,5 @@
 @if(auth()->user()->isAdmin())
     <a class="btn btn-primary" href="{{ route('admin.approvals.index') }}">Jóváhagyásra váró felhasználók</a>
 @endif
+<x-google-link />
 @endsection

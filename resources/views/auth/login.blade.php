@@ -2,6 +2,9 @@
 @section('title', 'Belépés | Edzések v2')
 @section('content')
 <div class="row justify-content-center"><div class="col-md-6 col-lg-5">
+    @if(config('services.google.client_id') && config('services.google.client_secret'))
+        <a href="{{ route('google.redirect') }}" class="btn btn-outline-primary mb-3">Folytatás Google-fiókkal</a>
+    @endif
     <h1 class="h3 mb-4">Belépés</h1>
     <form method="POST" action="{{ route('login.store') }}">
         @csrf
