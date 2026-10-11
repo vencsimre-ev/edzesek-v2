@@ -6,6 +6,7 @@ use App\Enums\ApprovalStatus;
 use App\Models\User;
 use App\Notifications\AccountApproved;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class ApproveUser
@@ -14,7 +15,8 @@ class ApproveUser
     {
         return DB::transaction(function () use ($student, $admin) {
             $admin = $admin->fresh();
-            abort_unless($admin && $admin->isAdmin() && $admin->isApproved() && $admin->hasVerifiedEmail(), 403);
+            abort_unless($admin, 403);
+            Gate::forUser($admin)->authorize('approve', $student);
 
             $student = $student->fresh();
             if (! $student->hasVerifiedEmail()) {

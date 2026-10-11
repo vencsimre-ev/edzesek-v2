@@ -8,6 +8,7 @@ use App\Enums\Role;
 use App\Models\User;
 use App\Notifications\AccountApproved;
 use App\Notifications\UserAwaitingApproval;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
@@ -17,7 +18,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -232,7 +232,7 @@ class AuthenticationTest extends TestCase
     {
         $student = User::factory()->approved()->create();
         $target = User::factory()->create();
-        $this->expectException(HttpException::class);
+        $this->expectException(AuthorizationException::class);
         app(ApproveUser::class)->approve($target, $student);
     }
 

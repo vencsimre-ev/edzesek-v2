@@ -7,6 +7,7 @@ use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Paginator::useBootstrapFive();
+        // This application uses Sanctum only for first-party session authentication.
+        Sanctum::getAccessTokenFromRequestUsing(fn () => null);
 
         VerifyEmail::toMailUsing(fn ($user, $url) => (new MailMessage)
             ->subject('Emailcím megerősítése')->greeting('Kedves '.$user->name.'!')
