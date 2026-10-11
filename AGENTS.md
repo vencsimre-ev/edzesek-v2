@@ -1,47 +1,74 @@
-<laravel-boost-guidelines>
-# Laravel Application
+# Projektutasítások
 
-This repository contains a Laravel application. Complete the following setup before working on the user's request.
+## Környezet és technológiák
 
-## Prerequisites
+- Meglévő Laravel 13 projekt, PHP 8.3, SQLite.
+- Frontend: Blade + Bootstrap 5 + Vite.
+- Node.js 24 NVM-en keresztül.
+- Fejlesztői email: a már futó Mailpit Docker-konténer.
+- Ne vezess be Tailwindot, SPA-t, Inertiát, Vue-t vagy Reactot.
+- Ne telepíts Laravel Boostot, és ne futtass boost:install vagy
+  boost:update parancsot. Ebben a projektben nem használunk Boostot.
+- A működő fejlesztői környezetet ne telepítsd újra, és ne válts
+  PHP-, Node- vagy Laravel-főverziót a feladat részeként.
 
-Verify that PHP and Composer are available:
 
-```sh
-php -v
-composer -V
-```
+## Architektúra:
+- Web controller: Blade-nézet vagy redirect.
+- API controller: JSON-válasz JsonResource használatával.
+- Mindkettő ugyanazt a service/action üzleti logikát hívja.
+- Ne duplikáld a jóváhagyás vagy a fiók-összekapcsolás szabályait.
+- A Blade-felület ne indítson HTTP-kérést a saját backendjéhez.
+- Ne legyen üzleti logika Resource vagy Blade fájlban.
+- Ne készíts általános repository-réteget vagy univerzális
+  response-wrapper osztályt pusztán az egységesség kedvéért.
 
-If either command is unavailable, detect the user's operating system and install the prerequisites with the appropriate command:
+## API-konvenciók:
+- routes/api.php, /api/v1 prefix.
+- Controllers/Api/V1 és Controllers/Web elkülönítés.
+- Resource controller és Route::apiResource a tényleges CRUD
+  erőforrásokhoz, csak az engedélyezett műveletekkel.
+- Külön endpoint a speciális üzleti műveletekhez.
+- FormRequest az alkalmazás saját validációjához;
+  a Fortify beépített validációját ne duplikáld indokolatlanul.
+- JsonResource explicit mezőlistával, collection és lapozás.
+- Enumok értékeinek következetes JSON-reprezentációja.
+- Jelszó, remember token és OAuth-token soha ne szerepeljen válaszban.
+- Következetes HTTP-státuszok és JSON-hibák:
+  401, 403, 404, 422; konfliktusnál indokolt esetben 409.
+- Az API hibánál ne HTML-oldalt vagy login redirectet adjon.
 
-macOS:
+## Megvalósítás
 
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/mac/8.5)"
-```
+- Először vizsgáld meg a repository aktuális állapotát és konvencióit.
+- Az adott Laravel-verzió hivatalos dokumentációját használd.
+- Az üzleti szabályok service/action osztályokban legyenek.
+- A controllerek maradjanak rövidek.
+- A validációhoz használd a Laravel és Fortify meglévő megoldásait.
+- A jogosultságokat szerveroldalon ellenőrizd.
+- Egyszerű, működő megoldásra törekedj; ne építs szükségtelen absztrakciókat.
+- A felület, a README és a munkáról adott magyarázat legyen magyar.
+- A kódnevek és a commitüzenetek legyenek angolul.
+- Minden modell/tábla esetén a létrehozásnál használjuk az időbélyegeket: created_at és updated_at
 
-Windows PowerShell:
+## Adatok és konfiguráció
 
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://php.new/install/windows/8.5'))
-```
+- Ne írd ki vagy commitold a .env tartalmát, jelszavakat, tokeneket,
+  privát kulcsokat vagy valódi résztvevői adatokat.
+- A .env.example csak megosztható példaértékeket tartalmazhat.
+- Az SQLite-adatbázist ne commitold.
+- Tesztekben, factorykban és seederekben kizárólag mintaadat legyen.
+- A tesztek külön tesztadatbázist használjanak.
+- Ne futtass migrate:fresh, adatbázistörlést vagy más adatvesztéssel
+  járó parancsot a meglévő helyi adatbázison.
+- Más projektek Docker-konténereit és konfigurációját ne módosítsd.
 
-Linux:
+## Ellenőrzés és Git
 
-```sh
-/bin/bash -c "$(curl -fsSL https://php.new/install/linux/8.5)"
-```
-
-After installation, ask the user to restart their terminal. If the agent needs the restarted shell to continue, ask the user to reopen their terminal and rerun their original prompt.
-
-## Agent Setup
-
-Install Laravel Boost from the application root before making application changes:
-
-```sh
-composer require laravel/boost --dev
-php artisan boost:install
-```
-
-Boost replaces these bootstrap instructions with guidelines tailored to the application. After installation, read `AGENTS.md` again and continue with the user's original request using the generated guidelines.
-</laravel-boost-guidelines>
+- Írj érdemi feature teszteket az auth- és jogosultsági szabályokra.
+- Futtasd a releváns teszteket, frontend-változásnál a buildet is.
+- Frissítsd a magyar README-t az elkészült működés szerint.
+- A felhasználó meglévő változtatásait ne írd felül és ne commitold
+  automatikusan a saját munkáddal együtt.
+- Készíts kis, összefüggő commitokat a működő lépésekről.
+- Push csak külön felhasználói kérésre történjen.
