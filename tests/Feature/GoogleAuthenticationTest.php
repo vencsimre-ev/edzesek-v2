@@ -42,6 +42,8 @@ class GoogleAuthenticationTest extends TestCase
         $this->fakeGoogle();
         $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('home'));
         $student = User::where('google_id', 'google-123')->sole();
+        $this->assertSame($student->name, $student->participant->name);
+        $this->assertSame($student->email, $student->participant->email);
         $this->assertSame(Role::Student, $student->role);
         $this->assertSame(ApprovalStatus::Pending, $student->approval_status);
         $this->assertTrue($student->hasVerifiedEmail());
@@ -59,6 +61,7 @@ class GoogleAuthenticationTest extends TestCase
         Auth::forgetGuards();
         $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('home'));
         $this->assertDatabaseCount('users', 2);
+        $this->assertDatabaseCount('participants', 1);
         Notification::assertSentToTimes($admin, UserAwaitingApproval::class, 1);
     }
 

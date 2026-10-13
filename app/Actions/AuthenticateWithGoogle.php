@@ -65,6 +65,7 @@ class AuthenticateWithGoogle
                 $user->approval_status = ApprovalStatus::Pending;
                 $user->email_verified_at = now();
                 $user->save();
+                app(EnsureStudentParticipant::class)->ensure($user);
                 DB::afterCommit(fn () => event(new Verified($user)));
 
                 return $user;
