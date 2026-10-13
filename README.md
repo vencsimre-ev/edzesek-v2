@@ -3,7 +3,7 @@
 Mászóedzések, résztvevők, részvételek, bérletalkalmak és manuálisan
 rögzített befizetések kezelésére készülő webalkalmazás.
 
-A regisztráció, email-megerősítés és admin jóváhagyás elkészült.
+A regisztráció, email-megerősítés, admin jóváhagyás és résztvevőkezelés elkészült.
 Az edzéskezelési funkciók később készülnek el.
 
 ## Jelenlegi állapot
@@ -20,7 +20,8 @@ Az edzéskezelési funkciók később készülnek el.
 - Admin jóváhagyási lista, jogosultságvédelem és emailes értesítések.
 - Google-regisztráció és belépés Socialite-tal, explicit fiók-összekapcsolás.
 - Sanctum session alapú REST API: saját állapot, adminlista és jóváhagyás.
-- Interaktív adminlétrehozó parancs és auth feature tesztek.
+- Résztvevőmodell, kereshető és lapozott admin CRUD, archiválás és explicit fiókkapcsolás.
+- Interaktív adminlétrehozó és idempotens résztvevőpótló parancs, auth/API feature tesztek.
 
 ## Technológiák
 
@@ -174,7 +175,7 @@ Az admin adatait te adod meg; a megvalósítás nem hozott létre helyi admint.
 | Nem megerősített email | Megerősítő oldal, megerősítés, újraküldés, kijelentkezés |
 | Megerősített, pending | Jóváhagyásra váró oldal, kijelentkezés |
 | Megerősített, approved student | Védett kezdőoldal (`/home`) |
-| Megerősített, approved admin | Védett kezdőoldal és jóváhagyások (`/admin/approvals`) |
+| Megerősített, approved admin | Védett kezdőoldal, jóváhagyások (`/admin/approvals`) és résztvevők (`/admin/participants`) |
 
 A nyilvános kezdőlap minden állapotban elérhető. A PHP backed enumok:
 `Role` (`admin`, `student`) és `ApprovalStatus` (`pending`, `approved`).
@@ -433,6 +434,162 @@ Hivatalos dokumentáció:
 [Laravel 13 Sanctum](https://laravel.com/framework/docs/13.x/sanctum),
 [Laravel 13 Socialite](https://laravel.com/framework/docs/13.x/socialite),
 [Google OAuth webalkalmazás-beállítás](https://developers.google.com/identity/protocols/oauth2/web-server).
+
+## Résztvevők és bejelentkezési fiókok
+
+A `User` a bejelentkezési fiók; a `Participant` az edzésen részt vevő személy.
+Egy fiókhoz legfeljebb egy résztvevő tartozhat, de a vendégnek nincs fiókja.
+A `participants.user_id` nullable, egyedi foreign key. Fióktörlés esetén
+nullázódik, a résztvevő története megmarad. Név vagy email alapján nincs
+automatikus személyazonosítás, összekapcsolás vagy összevonás; ezek nem egyedi mezők.
+
+A résztvevő kötelező neve mellett az email, telefonszám és belső megjegyzés
+opcionális. A megjegyzés kizárólag admin számára érhető el. A résztvevő
+szerkesztése nem módosítja a fiók nevét, emailcímét, szerepét vagy jóváhagyását,
+és a résztvevő emailje nem igazol email-megerősítést. A `/api/v1/me` változatlan
+UserResource-t ad: résztvevői megjegyzés vagy más személy adata nem kerül bele.
+
+Normál és új Google-regisztrációkor a student fiók és a hozzá tartozó,
+induló névvel és emaillel kitöltött résztvevő egy tranzakcióban jön létre.
+Visszatérő Google-belépés nem készít új rekordot és nem írja át a résztvevő adatait.
+Az adminlétrehozó parancs nem készít résztvevőt.
+
+Meglévő telepítésnél, a migráció után:
+
+```bash
+php artisan migrate
+php artisan app:backfill-participants
+```
+
+A pótló parancs csak a hiányzó student rekordokat készíti el, fiókonként
+tranzakcióban. Újra futtatható: nem módosít meglévő résztvevőt, és archivált
+rekord mellé sem készít másodikat. Nem használ személyes adatot migrációban vagy seederben.
+
+### Adminfelület
+
+A kezdőoldal **Résztvevők** gombja a `/admin/participants` oldalra vezet.
+Verified + approved + admin szükséges, szerveroldali middleware és policy védi.
+A lista név, email és telefonszám alapján kereshető, lapozott. Új vendég
+létrehozható; a részletek oldalon szerkesztés, fiókkapcsolás és archiválás érhető el.
+A név/email/telefon keresés részszövegre keres, a `%` és `_` karaktert szó szerint kezeli.
+Az SQLite beépített `lower()` függvénye az ASCII betűknél kis-/nagybetűfüggetlen;
+az ékezetes betűknél a megfelelő írásmódot kell használni.
+
+Vendégnél a **Student fiók összekapcsolása** oldalon név vagy email alapján
+kereshető, lapozott fióklistából választhatsz. A kapcsolás explicit művelet,
+csak student fiókra engedélyezett, és nem ad jóváhagyást vagy adminjogot.
+Ha a fiókhoz már tartozik másik (akár archivált) résztvevő, vagy a résztvevő
+már másik fiókhoz kapcsolódik, magyar hibaüzenetet kapsz. Automatikus törlés,
+áthelyezés és teljes résztvevő-összevonás nincs. Ugyanazon kapcsolat ismétlése
+idempotens. Egyedi adatbázis-korlát és tranzakció védi a kapcsolást.
+
+Az archiválás soft delete (`deleted_at`): a résztvevő eltűnik az aktív listából,
+az aktív részletek és módosító végpontok számára 404-et ad. A kapcsolt User
+megmarad, be tud lépni a korábbi jogosultságaival. Archivált résztvevő nem
+kapcsolható fiókhoz. Végleges törlés és visszaállító felület nincs ebben a szakaszban.
+Minden résztvevőhöz `created_at` és `updated_at` tartozik.
+
+### Résztvevő REST API
+
+A meglévő Sanctum session/CSRF hitelesítést használja. Minden alábbi
+endpoint verified + approved + admin jogosultságot igényel.
+A web és az API közös `ManageParticipants` és `LinkParticipantUser` actionöket hív.
+
+| Endpoint | Működés | Siker |
+| --- | --- | --- |
+| GET `/api/v1/participants` | Aktív, lapozott lista | 200 |
+| POST `/api/v1/participants` | Vendég létrehozása | 201 |
+| GET `/api/v1/participants/{participant}` | Részletek | 200 |
+| PATCH `/api/v1/participants/{participant}` | Résztvevőadatok módosítása | 200 |
+| DELETE `/api/v1/participants/{participant}` | Archiválás, nem végleges törlés | 204, üres válasz |
+| POST `/api/v1/participants/{participant}/link-user` | Explicit student fiókkapcsolás | 200 |
+
+Listaparaméterek: `search` opcionális szöveg, legfeljebb 255 karakter;
+`per_page` 1–100 (alapérték 20); `page` pozitív egész. A válasz `data`,
+`links`, `meta` mezőket tartalmaz, a lapozási linkek megőrzik a validált szűrőket.
+
+Létrehozáskor a `name` kötelező, legfeljebb 255 karakter. Az `email` nullable
+email, legfeljebb 255 karakter; a `phone` nullable szöveg, legfeljebb 50 karakter;
+a `notes` nullable szöveg, legfeljebb 10 000 karakter. PATCH esetén csak a megadott
+mezők változnak, a név nem üríthető. A CRUD nem fogad el `user_id` vagy auth-mezőket;
+a fiókkapcsoláshoz külön kérés kell, `{"user_id": 42}` törzzsel.
+
+A ParticipantResource explicit mezői: `id`, `user_id`, `name`, `email`, `phone`,
+`notes`, `created_at`, `updated_at`, `deleted_at`. A dátumok ISO 8601 UTC-ben
+érkeznek. Beágyazott User, jelszó, remember token vagy OAuth-token nincs a válaszban.
+
+Példák belépett admin böngészőkonzoljából, kizárólag mintaadatokkal
+(a korábban bemutatott `xsrf()` segédfüggvénnyel):
+
+```javascript
+const headers = { Accept: 'application/json', 'Content-Type': 'application/json',
+    'X-XSRF-TOKEN': xsrf() };
+const guest = await fetch('/api/v1/participants', {
+    method: 'POST', credentials: 'same-origin', headers,
+    body: JSON.stringify({ name: 'Minta Vendég', email: 'guest@example.test',
+        phone: '+36 30 000 0000', notes: 'Kitalált admin megjegyzés' })
+}).then(response => response.json());
+const list = await fetch('/api/v1/participants?search=Minta&per_page=10', {
+    credentials: 'same-origin', headers: { Accept: 'application/json' }
+}).then(response => response.json());
+await fetch(`/api/v1/participants/${guest.data.id}`, {
+    method: 'PATCH', credentials: 'same-origin', headers,
+    body: JSON.stringify({ phone: null })
+});
+// Meglévő, még résztvevőhöz nem kapcsolt student fiók saját azonosítója.
+const studentId = 42;
+await fetch(`/api/v1/participants/${guest.data.id}/link-user`, {
+    method: 'POST', credentials: 'same-origin', headers,
+    body: JSON.stringify({ user_id: studentId })
+});
+await fetch(`/api/v1/participants/${guest.data.id}`, {
+    method: 'DELETE', credentials: 'same-origin', headers
+}); // 204: nincs JSON-törzs.
+```
+
+Hibák: 401 belépés hiányában; 403 hiányzó jogosultság; 404 hiányzó vagy
+archivált résztvevő; 422 validációs hiba (például nem student célfiók);
+409 foglalt fiók/résztvevő; 419 CSRF/session hiba. Az API minden esetben JSON-hibát
+ad, 422-nél mezőnkénti `errors` mezővel. Kapcsolási konfliktus nem módosít adatot.
+
+### Ellenőrzések és kézi próba
+
+```bash
+php artisan test
+vendor/bin/pint --test
+npm run build
+```
+
+A résztvevőtesztek külön memóriabeli SQLite-on ellenőrzik a regisztrációt,
+tranzakciós visszagörgetést, Google-visszatérést, idempotens pótlást, web/API CRUD-ot,
+keresést, lapozást, jogosultságokat, notes kizárását, explicit kapcsolást,
+konfliktusokat, adatbáziskorlátot és az archiválás/fióktörlés utáni adatmegőrzést.
+A teljes tesztfuttatás a meglévő auth-, Google- és user API-teszteket is tartalmazza.
+
+Az alábbi kézi folyamatok még ellenőrizendők; az automatizált teszt nem jelent
+valódi Google- vagy böngészős ellenőrzést:
+
+1. A migráció után futtasd kétszer a pótló parancsot; a második futás 0 új
+   résztvevőt jelezzen. Adminnak ne keletkezzen kötelező résztvevője.
+2. Adminként hozz létre vendéget, keress név/email/telefon szerint, lapozz,
+   szerkeszd és nézd meg a részleteit. A belső megjegyzés csak adminnak látszódjon.
+3. Új normál regisztráció után ellenőrizd az induló résztvevőt, majd email-megerősítés
+   és jóváhagyás után lépj be studentként. A résztvevő adminfelület és API legyen tiltott.
+4. Saját OAuth-konfigurációval: **új Google-regisztráció → pending → admin jóváhagyás
+   → kijelentkezés → visszatérő Google-belépés**. A `/home` legyen elérhető, és
+   pontosan egy résztvevő maradjon a fiókhoz.
+5. Kapcsolj vendéget még szabad student fiókhoz. Ismételd meg ugyanazt API-n;
+   ne keletkezzen duplikáció. Foglalt fióknál legyen magyar webhiba, API-n 409.
+   Kapcsolt résztvevő áthelyezése és adminfiók kapcsolása legyen tiltott.
+6. Archiválj kapcsolt résztvevőt: az aktív listában ne szerepeljen, a fiók
+   továbbra is beléphessen, szerepe/jóváhagyása maradjon változatlan.
+7. Böngészőkonzolból ellenőrizd a session/CSRF API-kéréseket, a státuszkódokat
+   és a student `/me` válaszát: belső megjegyzés ne szerepeljen.
+
+A megvalósításhoz használt hivatalos dokumentáció:
+[Laravel 13 Eloquent és soft delete](https://laravel.com/framework/docs/13.x/eloquent),
+[Laravel 13 policyk](https://laravel.com/framework/docs/13.x/authorization),
+[Laravel 13 validáció](https://laravel.com/framework/docs/13.x/validation).
 
 ## Adatok és titkos konfiguráció
 
