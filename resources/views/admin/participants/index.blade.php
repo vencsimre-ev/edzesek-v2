@@ -2,7 +2,7 @@
 @section('title', 'Résztvevők | Edzések v2')
 @section('content')
 <div class="d-flex flex-wrap gap-3 justify-content-between mb-4">
-    <h1 class="h3">Aktív résztvevők</h1>
+    <h1 class="h3">Résztvevők</h1>
     <a class="btn btn-primary" href="{{ route('admin.participants.create') }}">Új vendég</a>
 </div>
 <form method="GET" class="mb-4 d-flex gap-2">
@@ -13,12 +13,26 @@
 </form>
 <div class="table-responsive">
 <table class="table align-middle">
-    <thead><tr><th>Név</th><th>Email</th><th>Telefon</th><th>Fiók</th><th>Részletek</th></tr></thead>
+    <thead><tr><th>Név</th><th>Email</th></tr></thead>
     <tbody>
     @forelse($participants as $participant)
-        <tr><td>{{ $participant->name }}</td><td>{{ $participant->email ?? '–' }}</td><td>{{ $participant->phone ?? '–' }}</td><td>{{ $participant->user_id ? 'Kapcsolt' : 'Vendég' }}</td><td><a href="{{ route('admin.participants.show', $participant) }}">Megnyitás</a></td></tr>
+        <tr>
+            <td>
+                <a href="{{ route('admin.participants.show', $participant) }}">{{ $participant->name }}</a>
+                @if($participant->user_id)
+                    <span class="text-secondary ms-1" title="Kapcsolt bejelentkezési fiók">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="7" r="4" />
+                            <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+                        </svg>
+                        <span class="visually-hidden">Kapcsolt bejelentkezési fiók</span>
+                    </span>
+                @endif
+            </td>
+            <td>{{ $participant->email ?? '–' }}</td>
+        </tr>
     @empty
-        <tr><td colspan="5">Nincs találat.</td></tr>
+        <tr><td colspan="2">Nincs találat.</td></tr>
     @endforelse
     </tbody>
 </table>

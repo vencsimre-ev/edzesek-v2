@@ -29,7 +29,11 @@ class LinkParticipantUser
                 }
                 // Conditional update also prevents concurrent reassignment of the same guest.
                 $changed = Participant::query()->whereKey($current->id)->whereNull('user_id')
-                    ->update(['user_id' => $user->id, 'updated_at' => now()]);
+                    ->update([
+                        'user_id' => $user->id,
+                        'email' => filled($current->email) ? $current->email : $user->email,
+                        'updated_at' => now(),
+                    ]);
                 if (! $changed) {
                     throw new ConflictHttpException('A résztvevő már össze van kapcsolva.');
                 }

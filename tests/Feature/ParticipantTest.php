@@ -127,6 +127,21 @@ class ParticipantTest extends TestCase
         $this->assertSame($authData, $student->fresh()->getAttributes());
     }
 
+    public function test_link_fills_missing_email_and_repeated_link_preserves_later_contact_changes(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+        $student = User::factory()->create();
+        $guest = $this->guest(['email' => null]);
+        $url = "/api/v1/participants/{$guest->id}/link-user";
+        $authData = $student->fresh()->getAttributes();
+        $this->postJson($url, ['user_id' => $student->id])->assertOk()
+            ->assertJsonPath('data.email', $student->email);
+        $guest->refresh()->update(['email' => 'contact@example.test']);
+        $this->postJson($url, ['user_id' => $student->id])->assertOk()
+            ->assertJsonPath('data.email', 'contact@example.test');
+        $this->assertSame($authData, $student->fresh()->getAttributes());
+    }
+
     public function test_occupied_account_including_archived_and_occupied_participant_produce_conflicts(): void
     {
         $admin = User::factory()->admin()->create();
@@ -169,7 +184,9 @@ class ParticipantTest extends TestCase
         $this->post('/admin/participants', ['name' => 'Web Vendég', 'notes' => '<script>sample</script>'])->assertRedirect();
         $participant = Participant::sole();
         $base = "/admin/participants/{$participant->id}";
-        $this->get('/admin/participants?search=Web')->assertOk()->assertSee('Web Vendég');
+        $this->get('/admin/participants?search=Web')->assertOk()->assertSee('Web Vendég')
+            ->assertSee(route('admin.participants.show', $participant))
+            ->assertDontSee('<th>Telefon</th>', false)->assertDontSee('<th>Fiók</th>', false);
         $this->get($base)->assertOk()->assertSee('&lt;script&gt;sample&lt;/script&gt;', false)->assertDontSee('<script>sample</script>', false);
         $this->get($base.'/edit')->assertOk();
         $this->patch($base, ['name' => 'Web Mentett'])->assertRedirect(route('admin.participants.show', $participant));
@@ -181,6 +198,8 @@ class ParticipantTest extends TestCase
         $available = User::factory()->create();
         $this->post($base.'/link-user', ['user_id' => $available->id])->assertRedirect(route('admin.participants.show', $participant));
         $this->assertSame($available->id, $participant->fresh()->user_id);
+        $this->get('/admin/participants')->assertSee('Kapcsolt bejelentkezési fiók');
+        $this->get($base)->assertSee('Törlés')->assertDontSee('Archiválás');
         $this->delete($base)->assertRedirect(route('admin.participants.index'));
         $this->get('/admin/participants')->assertDontSee('Web Mentett');
         $this->assertNotNull($available->fresh());

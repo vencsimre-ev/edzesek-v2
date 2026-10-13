@@ -469,8 +469,12 @@ rekord mellé sem készít másodikat. Nem használ személyes adatot migráció
 
 A kezdőoldal **Résztvevők** gombja a `/admin/participants` oldalra vezet.
 Verified + approved + admin szükséges, szerveroldali middleware és policy védi.
-A lista név, email és telefonszám alapján kereshető, lapozott. Új vendég
-létrehozható; a részletek oldalon szerkesztés, fiókkapcsolás és archiválás érhető el.
+A lista két oszlopból áll: név és email; a névre kattintva nyílnak a részletek.
+A név melletti kis ikon jelzi a kapcsolt bejelentkezési fiókot. Telefonszám és
+külön fiókoszlop nincs; név, email és telefonszám alapján továbbra is kereshető,
+lapozott. Új vendég létrehozható; a részletek oldalon szerkesztés és
+fiókkapcsolás érhető el, a törlés egy visszafogott, lenyitható művelet.
+Az edzésrészvételek később, az edzéskezeléssel együtt jelennek majd meg.
 A név/email/telefon keresés részszövegre keres, a `%` és `_` karaktert szó szerint kezeli.
 Az SQLite beépített `lower()` függvénye az ASCII betűknél kis-/nagybetűfüggetlen;
 az ékezetes betűknél a megfelelő írásmódot kell használni.
@@ -481,9 +485,12 @@ csak student fiókra engedélyezett, és nem ad jóváhagyást vagy adminjogot.
 Ha a fiókhoz már tartozik másik (akár archivált) résztvevő, vagy a résztvevő
 már másik fiókhoz kapcsolódik, magyar hibaüzenetet kapsz. Automatikus törlés,
 áthelyezés és teljes résztvevő-összevonás nincs. Ugyanazon kapcsolat ismétlése
-idempotens. Egyedi adatbázis-korlát és tranzakció védi a kapcsolást.
+idempotens. Kapcsoláskor az üres résztvevői emailmezőt a fiók emailjével töltjük
+ki; a már megadott kapcsolattartási emailt megőrizzük. Ezután nincs folyamatos
+email-szinkronizálás. Egyedi adatbázis-korlát és tranzakció védi a kapcsolást.
 
-Az archiválás soft delete (`deleted_at`): a résztvevő eltűnik az aktív listából,
+A felület **Törlés** művelete logikai törlés, a háttérben soft delete
+(`deleted_at`, a korábbi API-ban archiválás): a résztvevő eltűnik az aktív listából,
 az aktív részletek és módosító végpontok számára 404-et ad. A kapcsolt User
 megmarad, be tud lépni a korábbi jogosultságaival. Archivált résztvevő nem
 kapcsolható fiókhoz. Végleges törlés és visszaállító felület nincs ebben a szakaszban.

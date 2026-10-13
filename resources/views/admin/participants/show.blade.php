@@ -17,13 +17,16 @@
     @endif
     <a class="btn btn-outline-secondary" href="{{ route('admin.participants.index') }}">Vissza a listához</a>
 </div>
-<div class="card border-warning"><div class="card-body">
-    <h2 class="h5">Archiválás</h2>
-    <p>A résztvevő eltűnik az aktív listából. A kapcsolt fiók megmarad, jogosultságai nem változnak.</p>
-    <form method="POST" action="{{ route('admin.participants.destroy', $participant) }}">
+<details class="mt-4">
+    <summary class="text-secondary">Törlés</summary>
+    <form method="POST" action="{{ route('admin.participants.destroy', $participant) }}" class="mt-3">
         @csrf @method('DELETE')
-        <div class="form-check mb-3"><input id="confirm-archive" type="checkbox" class="form-check-input" required><label for="confirm-archive" class="form-check-label">Archiválni szeretném ezt a résztvevőt.</label></div>
-        <button class="btn btn-outline-danger">Résztvevő archiválása</button>
+        <p class="small text-secondary">A résztvevő kikerül a listából, de adatai megmaradnak. A kapcsolt bejelentkezési fiók nem törlődik.</p>
+        <div class="form-check mb-2">
+            <input id="confirm-delete" type="checkbox" class="form-check-input" required>
+            <label for="confirm-delete" class="form-check-label">Eltávolítom a résztvevőt a listából.</label>
+        </div>
+        <button class="btn btn-outline-danger btn-sm">Résztvevő törlése</button>
     </form>
-</div></div>
+</details>
 @endsection
