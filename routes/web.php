@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Web\ApprovalController;
 use App\Http\Controllers\Web\GoogleAuthController;
+use App\Http\Controllers\Web\LinkParticipantUserController;
+use App\Http\Controllers\Web\ParticipantController;
 use App\Http\Middleware\EnsureGoogleConfigured;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +20,10 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::view('/home', 'home')->name('home');
 
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::resource('participants', ParticipantController::class)->except('update');
+        Route::patch('/participants/{participant}', [ParticipantController::class, 'update'])->name('participants.update');
+        Route::get('/participants/{participant}/link-user', [LinkParticipantUserController::class, 'create'])->name('participants.link-user.create');
+        Route::post('/participants/{participant}/link-user', [LinkParticipantUserController::class, 'store'])->name('participants.link-user.store');
         Route::get('/approvals', [ApprovalController::class, 'index'])->name('approvals.index');
         Route::patch('/approvals/{user}', [ApprovalController::class, 'update'])->name('approvals.update');
     });
