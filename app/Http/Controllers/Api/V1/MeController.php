@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Gate;
 
 class MeController extends Controller
 {
-    public function __invoke(Request $request): UserResource
+    public function show(Request $request): UserResource
     {
         Gate::authorize('view', $request->user());
 

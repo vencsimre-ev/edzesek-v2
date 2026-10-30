@@ -10,7 +10,7 @@ use App\Models\User;
 
 class ApproveUserController extends Controller
 {
-    public function __invoke(ApproveUserRequest $request, User $user, ApproveUser $approve): UserResource
+    public function approve(ApproveUserRequest $request, User $user, ApproveUser $approve): UserResource
     {
         $approve->approve($user, $request->user());
 

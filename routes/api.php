@@ -8,17 +8,17 @@ use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->middleware('auth:sanctum')->group(function () {
-    Route::get('/me', MeController::class)->name('me');
+    Route::get('/me', [MeController::class, 'show'])->name('me');
 
     Route::middleware(['verified', 'approved', 'admin'])->group(function () {
         Route::apiResource('participants', ParticipantController::class)
             ->only(['index', 'store', 'show', 'update', 'destroy']);
-        Route::post('/participants/{participant}/link-user', LinkParticipantUserController::class)
+        Route::post('/participants/{participant}/link-user', [LinkParticipantUserController::class, 'store'])
             ->name('participants.link-user');
     });
 
     Route::prefix('admin')->name('admin.')->middleware(['verified', 'approved', 'admin'])->group(function () {
         Route::apiResource('users', UserController::class)->only('index');
-        Route::patch('/users/{user}/approve', ApproveUserController::class)->name('users.approve');
+        Route::patch('/users/{user}/approve', [ApproveUserController::class, 'approve'])->name('users.approve');
     });
 });

@@ -199,8 +199,10 @@ class ParticipantTest extends TestCase
         $this->post($base.'/link-user', ['user_id' => $available->id])->assertRedirect(route('admin.participants.show', $participant));
         $this->assertSame($available->id, $participant->fresh()->user_id);
         $this->get('/admin/participants')->assertSee('Kapcsolt bejelentkezési fiók');
-        $this->get($base)->assertSee('Törlés')->assertDontSee('Archiválás');
-        $this->delete($base)->assertRedirect(route('admin.participants.index'));
+        $this->get($base)->assertSee('Archiválás')->assertSee('Archiválom a résztvevőt.')
+            ->assertSee('Résztvevő archiválása')->assertDontSee('Törlés')->assertDontSee('Résztvevő törlése');
+        $this->delete($base)->assertRedirect(route('admin.participants.index'))
+            ->assertSessionHas('message', 'A résztvevő archiválva.');
         $this->get('/admin/participants')->assertDontSee('Web Mentett');
         $this->assertNotNull($available->fresh());
     }

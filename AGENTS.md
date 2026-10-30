@@ -14,6 +14,7 @@
 
 
 ## Architektúra:
+- Kifejezetten REST API alapú backend kialakítására törekedj.
 - Web controller: Blade-nézet vagy redirect.
 - API controller: JSON-válasz JsonResource használatával.
 - Mindkettő ugyanazt a service/action üzleti logikát hívja.
@@ -29,10 +30,14 @@
 - Resource controller és Route::apiResource a tényleges CRUD
   erőforrásokhoz, csak az engedélyezett műveletekkel.
 - Külön endpoint a speciális üzleti műveletekhez.
+- Ne használj controller `__invoke` metódust. Használj névvel ellátott
+  metódusokat: `index`, `show`, `store`, `update`, `destroy`, `approve`, `cancel` stb.
 - FormRequest az alkalmazás saját validációjához;
   a Fortify beépített validációját ne duplikáld indokolatlanul.
 - JsonResource explicit mezőlistával, collection és lapozás.
 - Enumok értékeinek következetes JSON-reprezentációja.
+- A műveletek jogosultságát policykkal ellenőrizd; a webes és API-controllerek
+  közös service/action üzleti logikát használjanak.
 - Jelszó, remember token és OAuth-token soha ne szerepeljen válaszban.
 - Következetes HTTP-státuszok és JSON-hibák:
   401, 403, 404, 422; konfliktusnál indokolt esetben 409.
@@ -47,6 +52,7 @@
 - A validációhoz használd a Laravel és Fortify meglévő megoldásait.
 - A jogosultságokat szerveroldalon ellenőrizd.
 - Egyszerű, működő megoldásra törekedj; ne építs szükségtelen absztrakciókat.
+- Kis, külön átnézhető egységekben dolgozz.
 - A felület, a README és a munkáról adott magyarázat legyen magyar.
 - A kódnevek és a commitüzenetek legyenek angolul.
 - Minden modell/tábla esetén a létrehozásnál használjuk az időbélyegeket: created_at és updated_at
@@ -68,7 +74,8 @@
 - Írj érdemi feature teszteket az auth- és jogosultsági szabályokra.
 - Futtasd a releváns teszteket, frontend-változásnál a buildet is.
 - Frissítsd a magyar README-t az elkészült működés szerint.
-- A felhasználó meglévő változtatásait ne írd felül és ne commitold
-  automatikusan a saját munkáddal együtt.
-- Készíts kis, összefüggő commitokat a működő lépésekről.
-- Push csak külön felhasználói kérésre történjen.
+- A felhasználó meglévő változtatásait őrizd meg, ne írd felül.
+- A commitokat a felhasználó készíti. Ne futtass `git add`, `git commit`
+  vagy `git push` parancsot.
+- Minden egység végén adj változásösszefoglalót, ellenőrzési eredményeket
+  és javasolt angol commitüzenetet, majd állj meg átnézésre.

@@ -18,15 +18,15 @@
     <a class="btn btn-outline-secondary" href="{{ route('admin.participants.index') }}">Vissza a listához</a>
 </div>
 <details class="mt-4">
-    <summary class="text-secondary">Törlés</summary>
+    <summary class="text-secondary">Archiválás</summary>
     <form method="POST" action="{{ route('admin.participants.destroy', $participant) }}" class="mt-3">
         @csrf @method('DELETE')
         <p class="small text-secondary">A résztvevő kikerül a listából, de adatai megmaradnak. A kapcsolt bejelentkezési fiók nem törlődik.</p>
         <div class="form-check mb-2">
-            <input id="confirm-delete" type="checkbox" class="form-check-input" required>
-            <label for="confirm-delete" class="form-check-label">Eltávolítom a résztvevőt a listából.</label>
+            <input id="confirm-archive" type="checkbox" class="form-check-input" required>
+            <label for="confirm-archive" class="form-check-label">Archiválom a résztvevőt.</label>
         </div>
-        <button class="btn btn-outline-danger btn-sm">Résztvevő törlése</button>
+        <button class="btn btn-outline-danger btn-sm">Résztvevő archiválása</button>
     </form>
 </details>
 @endsection

@@ -314,6 +314,9 @@ enumértékeket és erőforrás/üzleti művelet route-okat vettük át.
 A referencia általános válaszburkolóját és üzleti szabályait nem másoltuk.
 
 - `Controllers/Web`: Blade és redirect; `Controllers/Api/V1`: JSON resource.
+- A `/me` végpont a `MeController::show()`, a résztvevő fiókkapcsolása a
+  `LinkParticipantUserController::store()` metódust hívja, explicit route-hozzárendeléssel.
+- A felhasználó jóváhagyását az `ApproveUserController::approve()` metódus kezeli.
 - `Requests`: saját kérésvalidáció és policy alapú engedélyezés.
 - `Resources/UserResource`: kizárólag explicit válaszmezők; dátumok ISO 8601 UTC-ben.
 - `Actions`: közös jóváhagyás, Google-fiókkezelés és felhasználólista.
@@ -473,7 +476,7 @@ A lista két oszlopból áll: név és email; a névre kattintva nyílnak a rés
 A név melletti kis ikon jelzi a kapcsolt bejelentkezési fiókot. Telefonszám és
 külön fiókoszlop nincs; név, email és telefonszám alapján továbbra is kereshető,
 lapozott. Új vendég létrehozható; a részletek oldalon szerkesztés és
-fiókkapcsolás érhető el, a törlés egy visszafogott, lenyitható művelet.
+fiókkapcsolás érhető el, az archiválás egy visszafogott, lenyitható művelet.
 Az edzésrészvételek később, az edzéskezeléssel együtt jelennek majd meg.
 A név/email/telefon keresés részszövegre keres, a `%` és `_` karaktert szó szerint kezeli.
 Az SQLite beépített `lower()` függvénye az ASCII betűknél kis-/nagybetűfüggetlen;
@@ -489,8 +492,8 @@ idempotens. Kapcsoláskor az üres résztvevői emailmezőt a fiók emailjével 
 ki; a már megadott kapcsolattartási emailt megőrizzük. Ezután nincs folyamatos
 email-szinkronizálás. Egyedi adatbázis-korlát és tranzakció védi a kapcsolást.
 
-A felület **Törlés** művelete logikai törlés, a háttérben soft delete
-(`deleted_at`, a korábbi API-ban archiválás): a résztvevő eltűnik az aktív listából,
+A felület **Archiválás** művelete a háttérben soft delete
+(`deleted_at`): a résztvevő eltűnik az aktív listából,
 az aktív részletek és módosító végpontok számára 404-et ad. A kapcsolt User
 megmarad, be tud lépni a korábbi jogosultságaival. Archivált résztvevő nem
 kapcsolható fiókhoz. Végleges törlés és visszaállító felület nincs ebben a szakaszban.
