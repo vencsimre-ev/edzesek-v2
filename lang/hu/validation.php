@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'date_format' => 'A(z) :attribute dátumot és óra:perc értéket tartalmazzon (például 2026-11-05T18:00).',
     'enum' => 'A(z) :attribute értéke érvénytelen.',
     'in' => 'A(z) :attribute értéke érvénytelen.',
     'missing' => 'A(z) :attribute mező nem küldhető be.',

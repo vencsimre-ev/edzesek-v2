@@ -5,8 +5,8 @@
 <dl class="row">
     <dt class="col-sm-3">Állapot</dt><dd class="col-sm-9">{{ $trainingSession->status->label() }}</dd>
     <dt class="col-sm-3">Helyszín</dt><dd class="col-sm-9">{{ $trainingSession->location }}</dd>
-    <dt class="col-sm-3">Kezdés</dt><dd class="col-sm-9">{{ $trainingSession->starts_at->setTimezone('Europe/Budapest')->format('Y. m. d. H:i') }}</dd>
-    <dt class="col-sm-3">Befejezés</dt><dd class="col-sm-9">{{ $trainingSession->ends_at->setTimezone('Europe/Budapest')->format('Y. m. d. H:i') }}</dd>
+    <dt class="col-sm-3">Kezdés</dt><dd class="col-sm-9">{{ $trainingSession->starts_at->setTimezone(config('training.timezone'))->format('Y. m. d. H:i') }}</dd>
+    <dt class="col-sm-3">Befejezés</dt><dd class="col-sm-9">{{ $trainingSession->ends_at->setTimezone(config('training.timezone'))->format('Y. m. d. H:i') }}</dd>
     @if($trainingSession->cancellation_reason !== null)
         <dt class="col-sm-3">Elmaradás indoka</dt><dd class="col-sm-9" style="white-space: pre-wrap">{{ $trainingSession->cancellation_reason }}</dd>
     @endif

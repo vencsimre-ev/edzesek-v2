@@ -7,10 +7,10 @@ use App\Enums\TrainingSessionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelTrainingSessionRequest;
 use App\Http\Requests\CompleteTrainingSessionRequest;
+use App\Http\Requests\ListTrainingSessionsRequest;
+use App\Http\Requests\StoreTrainingSessionRequest;
+use App\Http\Requests\UpdateTrainingSessionRequest;
 use App\Http\Requests\Web\DestroyTrainingSessionRequest;
-use App\Http\Requests\Web\ListTrainingSessionsRequest;
-use App\Http\Requests\Web\StoreTrainingSessionRequest;
-use App\Http\Requests\Web\UpdateTrainingSessionRequest;
 use App\Models\TrainingSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -23,8 +23,6 @@ class TrainingSessionController extends Controller
     {
         $filters = $request->validated();
         $paginator = $sessions->paginate($filters);
-        // Preserve the local form representation in links, not the API-style conversion.
-        $paginator->appends($request->only(array_keys($filters)));
 
         return view('admin.training-sessions.index', [
             'sessions' => $paginator,

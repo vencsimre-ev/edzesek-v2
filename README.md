@@ -676,16 +676,25 @@ az ütköző módosítás/lezárás és az első indok megőrzésének eseteit.
 
 ### Időkezelés és listaszűrés
 
-Az alkalmazás meglévő `config/app.php` időzónája UTC maradt. Az API időpontjai
-RFC 3339 formátumúak: dátum, `T`, óra:perc:másodperc és explicit `Z` vagy
-`±HH:MM` eltolás szükséges. Legfeljebb hat törtmásodpercjegy megengedett.
-Időzóna nélküli, érvénytelen vagy csak dátumot tartalmazó érték 422-t ad.
-Tároláskor UTC-re normalizálunk, hat törtmásodpercjegyet őrzünk; a JSON-válasz
-ISO 8601 UTC (`Z`) értékeket ad. A többi modell időkezelését nem változtattuk.
+Az edzések időzónája egy helyen, a `config/training.php` fájlban állítható:
 
-Europe/Budapest szerint október 30-án a `18:00:00+01:00` időpont
-`17:00:00Z`; nyári időszámításkor a budapesti eltolás `+02:00`.
-Az eltolást a kliens az adott időpontnak megfelelően küldi, az API nem találja ki.
+```php
+'timezone' => 'Europe/Budapest',
+```
+
+A webes űrlap és az API ugyanazt az egyszerű,
+perc pontosságú helyi időpontot használja: **`2026-11-05T18:00`**.
+Másodpercet, törtmásodpercet vagy időzónaeltolást nem kell és nem lehet beküldeni.
+A validáció a Laravel beépített `date_format:Y-m-d\TH:i` szabálya; külön
+webes dátumátalakító trait és egyéni időzónás validációs szabály nincs.
+
+A `starts_at` és `ends_at` a JSON-válaszban is ugyanilyen helyi, perc pontosságú
+érték. A közös action a konfigurált időzónából UTC-re alakítja a tárolandó adatot,
+a resource és a Blade ugyanezt a konfigurációt használja a megjelenítéshez.
+A meglévő UTC-adatokat és az alkalmazás többi modelljének időkezelését nem
+kell átírni; a `created_at` és `updated_at` technikai időbélyegek maradnak UTC-ben.
+A téli/nyári eltolást a szerver kezeli. Nem létező óraátállítási időpontnál
+magyar validációs hiba érkezik.
 
 Listaszűrők:
 
@@ -694,12 +703,10 @@ Listaszűrők:
 - `starts_before`: kezdőidőpont felső határa, **kizárva** (`starts_at < érték`).
 - `per_page`: 1–100, alapérték 20; `page`: pozitív egész.
 
-Az időszűrők is explicit időzónaeltolást igényelnek, összehasonlításuk UTC-ben
-zajlik. Mindkettő az edzés **kezdését** szűri; nem időszakok átfedését keresik.
+Az időszűrők is a fenti helyi, perc pontosságú formátumot használják. Mindkettő az edzés **kezdését** szűri; nem időszakok átfedését keresik.
 Üres vagy fordított intervallum nem ad találatot. A sorrend időrendben növekvő: `starts_at ASC`,
 majd `id ASC`, így azonos kezdés esetén is stabil. A lapozási linkek megőrzik
-a validált szűrőket. URL-ben a `+` jelet `%2B` formában kell kódolni;
-a `URLSearchParams` ezt automatikusan elvégzi.
+a validált szűrőket.
 
 ### Endpointok és példák
 
@@ -718,14 +725,14 @@ FormRequesteket és explicit `TrainingSessionResource` válaszokat használnak.
 | POST `/api/v1/training-sessions/{trainingSession}/complete` | 200, `data`: TrainingSessionResource |
 | POST `/api/v1/training-sessions/{trainingSession}/cancel` | 200, `data`: TrainingSessionResource |
 
-Létrehozási kérés Europe/Budapest időponttal, kitalált adatokkal:
+Létrehozási kérés helyi időponttal, kitalált adatokkal:
 
 ```json
 {
   "title": "Minta mászóedzés",
   "location": "Minta mászóterem",
-  "starts_at": "2026-10-30T18:00:00+01:00",
-  "ends_at": "2026-10-30T20:00:00+01:00"
+  "starts_at": "2026-10-30T18:00",
+  "ends_at": "2026-10-30T20:00"
 }
 ```
 
@@ -737,8 +744,8 @@ Példaválasz, a mintaazonosítókkal és időbélyegekkel:
     "id": 1,
     "title": "Minta mászóedzés",
     "location": "Minta mászóterem",
-    "starts_at": "2026-10-30T17:00:00.000000Z",
-    "ends_at": "2026-10-30T19:00:00.000000Z",
+    "starts_at": "2026-10-30T18:00",
+    "ends_at": "2026-10-30T20:00",
     "status": "scheduled",
     "cancellation_reason": null,
     "created_by": 1,
@@ -758,8 +765,8 @@ Belépett admin böngészőkonzoljából, a REST API szakaszban bemutatott CSRF-
 const headers = { Accept: 'application/json', 'Content-Type': 'application/json',
     'X-XSRF-TOKEN': xsrf() };
 const filters = new URLSearchParams({ status: 'scheduled',
-    starts_from: '2026-10-30T00:00:00+01:00',
-    starts_before: '2026-10-31T00:00:00+01:00', per_page: '20' });
+    starts_from: '2026-10-30T00:00',
+    starts_before: '2026-10-31T00:00', per_page: '20' });
 await fetch(`/api/v1/training-sessions?${filters}`, {
     credentials: 'same-origin', headers
 }).then(response => response.json());
@@ -851,15 +858,12 @@ verified + approved + admin policy a törlésre is érvényes.
 Az edzés elmaradásának jelzéséhez az **Elmaradás jelzése** művelet való,
 a végleges törlés a felesleges vagy tévesen rögzített edzés eltávolítására szolgál.
 
-Az űrlapok natív dátum-/időválasztóval, **Europe/Budapest** helyi időt fogadnak,
-a megjelenítés is budapesti. A webes FormRequestek kizárólag az időbevitelt
-alakítják át, a meglévő API FormRequestek validációját és policyját öröklik.
-A háttérben továbbra is UTC tárolódik; az API eltolást megkövetelő formátuma
-változatlan. A téli/nyári eltolást az adott dátum alapján állapítjuk meg.
-Tavaszi óraátállításkor nem létező időpont nem menthető. Új időpontnál az őszi,
-kétszer előforduló órában a későbbi, téli időpontot használjuk; meglévő edzés
-változatlan helyi időpontját szerkesztéskor az eredeti eltolással őrizzük meg.
-Az API-val mindkét őszi előfordulás kifejezetten megadható.
+Az űrlap és az API közös FormRequesteket és közös actiont használ. Mindkettő
+ugyanazt az egyszerű helyi időpontot várja; a helyi időzónát a `training.timezone`
+konfiguráció adja meg. A Blade-felületen nincs időzóna- vagy másodpercbevitel.
+Új időpontnál az őszi kétszer előforduló órában a későbbi, téli időpontot
+használjuk. Változatlan helyi percértéket visszaküldve a meglévő tárolt
+időpontot megőrizzük, így a korábbi értékek nem tolódnak el szerkesztéskor.
 
 A validációs hiba után megmarad az eredeti helyi űrlapérték; változatlan
 percérték visszaküldésekor a szerkesztés megőrzi a tárolt másodpercet és

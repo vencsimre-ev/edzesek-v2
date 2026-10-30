@@ -9,11 +9,11 @@
     <div class="row">
         <div class="col-md-6 mb-3">
             <label for="starts_at" class="form-label">Kezdés</label>
-            <input id="starts_at" name="starts_at" type="datetime-local" step="60" class="form-control" required value="{{ old('starts_at', $trainingSession->starts_at?->setTimezone('Europe/Budapest')->format('Y-m-d\TH:i')) }}">
+            <input id="starts_at" name="starts_at" type="datetime-local" step="60" class="form-control" required value="{{ old('starts_at', $trainingSession->starts_at?->setTimezone(config('training.timezone'))->format('Y-m-d\TH:i')) }}">
         </div>
         <div class="col-md-6 mb-3">
             <label for="ends_at" class="form-label">Befejezés</label>
-            <input id="ends_at" name="ends_at" type="datetime-local" step="60" class="form-control" required value="{{ old('ends_at', $trainingSession->ends_at?->setTimezone('Europe/Budapest')->format('Y-m-d\TH:i')) }}">
+            <input id="ends_at" name="ends_at" type="datetime-local" step="60" class="form-control" required value="{{ old('ends_at', $trainingSession->ends_at?->setTimezone(config('training.timezone'))->format('Y-m-d\TH:i')) }}">
         </div>
     </div>
     <details class="mb-4" @if($errors->hasAny(['title', 'location', 'status'])) open @endif>

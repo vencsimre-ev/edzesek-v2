@@ -38,7 +38,7 @@
     @forelse($sessions as $session)
         <tr>
             <td>
-                <a href="{{ route('admin.training-sessions.show', $session) }}">{{ $session->starts_at->setTimezone('Europe/Budapest')->format('Y. m. d. H:i') }}–{{ $session->ends_at->setTimezone('Europe/Budapest')->format('H:i') }}</a>
+                <a href="{{ route('admin.training-sessions.show', $session) }}">{{ $session->starts_at->setTimezone(config('training.timezone'))->format('Y. m. d. H:i') }}–{{ $session->ends_at->setTimezone(config('training.timezone'))->format('H:i') }}</a>
                 <div class="small text-secondary">{{ $session->title }}</div>
             </td>
             <td>{{ $session->status->label() }}</td>

@@ -15,7 +15,7 @@ class ManageTrainingSessions
 {
     public function defaults(): TrainingSession
     {
-        $now = CarbonImmutable::now('Europe/Budapest');
+        $now = CarbonImmutable::now(config('training.timezone'));
         $startsAt = $now->startOfWeek(CarbonImmutable::MONDAY)->addDays(3)->setTime(18, 0);
         if ($startsAt->lt($now)) {
             $startsAt = $startsAt->addWeek();
@@ -33,8 +33,8 @@ class ManageTrainingSessions
     {
         return TrainingSession::query()
             ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
-            ->when(isset($filters['starts_from']), fn ($query) => $query->where('starts_at', '>=', $this->utc($filters['starts_from'])))
-            ->when(isset($filters['starts_before']), fn ($query) => $query->where('starts_at', '<', $this->utc($filters['starts_before'])))
+            ->when(isset($filters['starts_from']), fn ($query) => $query->where('starts_at', '>=', $this->localToUtc($filters['starts_from'], 'starts_from')))
+            ->when(isset($filters['starts_before']), fn ($query) => $query->where('starts_at', '<', $this->localToUtc($filters['starts_before'], 'starts_before')))
             ->orderBy('starts_at')->orderBy('id')
             ->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1)
             ->appends($filters);
@@ -63,7 +63,7 @@ class ManageTrainingSessions
 
     public function update(TrainingSession $trainingSession, array $data): TrainingSession
     {
-        $data = $this->normalizeDates(array_intersect_key($data, array_flip(['title', 'location', 'starts_at', 'ends_at'])));
+        $data = $this->normalizeDates(array_intersect_key($data, array_flip(['title', 'location', 'starts_at', 'ends_at'])), $trainingSession);
         if (isset($data['starts_at'], $data['ends_at'])) {
             $this->validateDuration($data['starts_at'], $data['ends_at']);
         }
@@ -78,7 +78,7 @@ class ManageTrainingSessions
             if (isset($data['ends_at']) && ! isset($data['starts_at'])) {
                 $query->where('starts_at', '<', $data['ends_at']);
             }
-            $changed = $query->update($data + ['updated_at' => $this->utc(now()->toISOString())]);
+            $changed = $query->update($data + ['updated_at' => now()->utc()->format('Y-m-d H:i:s.u')]);
             $current = TrainingSession::query()->findOrFail($trainingSession->id);
             if (! $changed) {
                 if ($current->status !== TrainingSessionStatus::Scheduled) {
@@ -96,7 +96,7 @@ class ManageTrainingSessions
         return DB::transaction(function () use ($trainingSession) {
             TrainingSession::query()->whereKey($trainingSession->id)
                 ->where('status', TrainingSessionStatus::Scheduled)
-                ->where('ends_at', '<=', $this->utc(now()->toISOString()))
+                ->where('ends_at', '<=', now()->utc()->format('Y-m-d H:i:s.u'))
                 ->update(['status' => TrainingSessionStatus::Completed->value]);
             $current = TrainingSession::query()->findOrFail($trainingSession->id);
             if ($current->status === TrainingSessionStatus::Cancelled) {
@@ -131,20 +131,30 @@ class ManageTrainingSessions
         }, 5);
     }
 
-    private function normalizeDates(array $data): array
+    private function normalizeDates(array $data, ?TrainingSession $current = null): array
     {
         foreach (['starts_at', 'ends_at'] as $field) {
             if (isset($data[$field])) {
-                $data[$field] = $this->utc($data[$field]);
+                if ($current && $current->{$field}->setTimezone(config('training.timezone'))->format('Y-m-d\TH:i') === $data[$field]) {
+                    unset($data[$field]);
+
+                    continue;
+                }
+                $data[$field] = $this->localToUtc($data[$field], $field);
             }
         }
 
         return $data;
     }
 
-    private function utc(string $value): string
+    private function localToUtc(string $value, string $field): string
     {
-        return CarbonImmutable::parse($value)->utc()->format('Y-m-d H:i:s.u');
+        $date = CarbonImmutable::createFromFormat('!Y-m-d\TH:i', $value, config('training.timezone'));
+        if ($date->format('Y-m-d\TH:i') !== $value) {
+            throw ValidationException::withMessages([$field => 'Az időpont nem létezik az óraátállítás miatt.']);
+        }
+
+        return $date->utc()->format('Y-m-d H:i:s.u');
     }
 
     private function validateDuration(string $startsAt, string $endsAt): void

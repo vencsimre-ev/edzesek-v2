@@ -36,8 +36,8 @@ class TrainingSessionApiTest extends TestCase
     {
         return array_replace([
             'title' => 'Minta mászóedzés', 'location' => 'Minta mászóterem',
-            'starts_at' => '2026-10-30T18:00:00+01:00',
-            'ends_at' => '2026-10-30T19:00:00+01:00',
+            'starts_at' => '2026-10-30T18:00',
+            'ends_at' => '2026-10-30T19:00',
         ], $overrides);
     }
 
@@ -53,8 +53,8 @@ class TrainingSessionApiTest extends TestCase
     {
         $response = $this->postJson('/api/v1/training-sessions', $this->payload())
             ->assertCreated()->assertJsonPath('data.status', 'scheduled')
-            ->assertJsonPath('data.starts_at', '2026-10-30T17:00:00.000000Z')
-            ->assertJsonPath('data.ends_at', '2026-10-30T18:00:00.000000Z')
+            ->assertJsonPath('data.starts_at', '2026-10-30T18:00')
+            ->assertJsonPath('data.ends_at', '2026-10-30T19:00')
             ->assertJsonMissingPath('data.price_huf')->assertJsonPath('data.created_by', $this->admin->id)
             ->assertJsonPath('data.cancellation_reason', null);
         $session = TrainingSession::sole();
@@ -105,7 +105,7 @@ class TrainingSessionApiTest extends TestCase
 
     public function test_historical_completed_and_past_scheduled_sessions_can_be_created(): void
     {
-        $past = ['starts_at' => '2026-10-29T18:00:00+01:00', 'ends_at' => '2026-10-29T19:00:00+01:00'];
+        $past = ['starts_at' => '2026-10-29T18:00', 'ends_at' => '2026-10-29T19:00'];
         $this->postJson('/api/v1/training-sessions', $this->payload($past + ['status' => 'completed']))
             ->assertCreated()->assertJsonPath('data.status', 'completed');
         $this->postJson('/api/v1/training-sessions', $this->payload($past))
@@ -121,7 +121,7 @@ class TrainingSessionApiTest extends TestCase
         $this->postJson('/api/v1/training-sessions', $this->payload(['status' => 'completed']))
             ->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->postJson('/api/v1/training-sessions', $this->payload([
-            'status' => 'completed', 'starts_at' => '2026-10-30T11:00:00Z', 'ends_at' => '2026-10-30T12:00:00Z',
+            'status' => 'completed', 'starts_at' => '2026-10-30T12:00', 'ends_at' => '2026-10-30T13:00',
         ]))->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->assertDatabaseCount('training_sessions', 0);
     }
@@ -129,11 +129,11 @@ class TrainingSessionApiTest extends TestCase
     public function test_invalid_dates_duration_price_and_required_fields_are_rejected(): void
     {
         foreach ([
-            ['starts_at', '2026-10-30T19:00:00+01:00'],
-            ['starts_at', '2026-10-30T20:00:00+01:00'],
+            ['starts_at', '2026-10-30T19:00'],
+            ['starts_at', '2026-10-30T20:00'],
             ['starts_at', '2026-10-30T18:00:00'],
-            ['starts_at', '2026-02-30T18:00:00+01:00'],
-            ['starts_at', '2026-10-30T25:00:00+01:00'],
+            ['starts_at', '2026-02-30T18:00'],
+            ['starts_at', '2026-10-30T25:00'],
             ['ends_at', 'tomorrow'], ['ends_at', '2026-10-30T19:00:00'],
             ['price_huf', -1], ['price_huf', 1.5], ['price_huf', null],
             ['title', ''], ['title', str_repeat('x', 256)],
@@ -146,17 +146,28 @@ class TrainingSessionApiTest extends TestCase
         $this->assertDatabaseCount('training_sessions', 0);
     }
 
-    public function test_offset_and_fractional_seconds_are_compared_as_utc_instants(): void
+    public function test_local_minute_input_uses_the_configured_timezone_and_hides_conversion_details(): void
     {
-        // Local clock values appear reversed, but UTC duration is positive.
-        $this->postJson('/api/v1/training-sessions', $this->payload([
-            'starts_at' => '2026-10-30T18:00:00.123456+02:00',
-            'ends_at' => '2026-10-30T17:00:00.123457+01:00',
-        ]))->assertCreated()->assertJsonPath('data.starts_at', '2026-10-30T16:00:00.123456Z')
-            ->assertJsonPath('data.ends_at', '2026-10-30T16:00:00.123457Z');
-        $this->postJson('/api/v1/training-sessions', $this->payload([
-            'starts_at' => '2026-10-30T18:00:00+02:00', 'ends_at' => '2026-10-30T17:00:00+01:00',
-        ]))->assertUnprocessable()->assertJsonValidationErrors('ends_at');
+        foreach ([
+            ['Europe/Budapest', '2026-10-30T18:00', '2026-10-30T20:00', '2026-10-30 17:00:00.000000'],
+            ['Europe/Budapest', '2026-07-01T18:00', '2026-07-01T20:00', '2026-07-01 16:00:00.000000'],
+            ['Europe/London', '2026-10-30T18:00', '2026-10-30T20:00', '2026-10-30 18:00:00.000000'],
+        ] as [$timezone, $start, $end, $storedStart]) {
+            config(['training.timezone' => $timezone]);
+            $this->postJson('/api/v1/training-sessions', $this->payload(['starts_at' => $start, 'ends_at' => $end]))
+                ->assertCreated()->assertJsonPath('data.starts_at', $start)->assertJsonPath('data.ends_at', $end);
+            $this->assertSame($storedStart, TrainingSession::latest('id')->firstOrFail()->getRawOriginal('starts_at'));
+        }
+    }
+
+    public function test_offsets_seconds_and_fractional_seconds_are_not_required_or_accepted(): void
+    {
+        foreach (['2026-10-30T18:00:00+01:00', '2026-10-30T18:00Z',
+            '2026-10-30T18:00:00', '2026-10-30T18:00:00.123456', '2026-03-29T02:30'] as $value) {
+            $this->postJson('/api/v1/training-sessions', $this->payload(['starts_at' => $value]))
+                ->assertUnprocessable()->assertJsonValidationErrors('starts_at');
+        }
+        $this->getJson('/api/v1/training-sessions?status=&starts_from=&starts_before=')->assertOk();
     }
 
     public function test_list_filters_time_bounds_inclusively_and_exclusively_with_stable_pagination(): void
@@ -167,15 +178,15 @@ class TrainingSessionApiTest extends TestCase
         $lastTie = $this->training(['starts_at' => '2026-10-30 10:00:00', 'ends_at' => '2026-10-30 11:00:00']);
         $this->training(['starts_at' => '2026-10-30 11:00:00', 'ends_at' => '2026-10-30 12:00:00']);
         $cancelled = $this->training(['status' => TrainingSessionStatus::Cancelled]);
-        $query = http_build_query(['status' => 'scheduled', 'starts_from' => '2026-10-30T10:00:00+01:00',
-            'starts_before' => '2026-10-30T12:00:00+01:00', 'per_page' => 2]);
+        $query = http_build_query(['status' => 'scheduled', 'starts_from' => '2026-10-30T10:00',
+            'starts_before' => '2026-10-30T12:00', 'per_page' => 2]);
         $response = $this->getJson('/api/v1/training-sessions?'.$query)->assertOk()
             ->assertJsonPath('meta.total', 3)->assertJsonCount(2, 'data');
         $this->assertSame([$lower->id, $firstTie->id], array_column($response->json('data'), 'id'));
         parse_str(parse_url($response->json('links.next'), PHP_URL_QUERY), $next);
         $this->assertSame('scheduled', $next['status']);
-        $this->assertSame('2026-10-30T10:00:00+01:00', $next['starts_from']);
-        $this->assertSame('2026-10-30T12:00:00+01:00', $next['starts_before']);
+        $this->assertSame('2026-10-30T10:00', $next['starts_from']);
+        $this->assertSame('2026-10-30T12:00', $next['starts_before']);
         $this->assertSame('2', $next['per_page']);
         $this->getJson('/api/v1/training-sessions?'.$query.'&page=2')
             ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $lastTie->id);
@@ -198,14 +209,14 @@ class TrainingSessionApiTest extends TestCase
         $url = '/api/v1/training-sessions/'.$session->id;
         $this->patchJson($url, ['title' => 'Átnevezett edzés', 'location' => 'Másik mintaterem'])
             ->assertOk()->assertJsonPath('data.title', 'Átnevezett edzés')->assertJsonMissingPath('data.price_huf');
-        $this->patchJson($url, ['starts_at' => '2026-10-30T11:30:00Z'])->assertUnprocessable()->assertJsonValidationErrors('ends_at');
-        $this->patchJson($url, ['ends_at' => '2026-10-30T09:00:00Z'])->assertUnprocessable();
-        $this->patchJson($url, ['starts_at' => '2026-10-30T12:00:00+02:00'])->assertOk()
-            ->assertJsonPath('data.starts_at', '2026-10-30T10:00:00.000000Z');
-        $this->patchJson($url, ['ends_at' => '2026-10-30T12:30:00+01:00'])->assertOk()
-            ->assertJsonPath('data.ends_at', '2026-10-30T11:30:00.000000Z');
-        $this->patchJson($url, ['starts_at' => '2026-10-30T13:00:00Z', 'ends_at' => '2026-10-30T14:00:00Z'])->assertOk();
-        $this->patchJson($url, ['starts_at' => '2026-10-30T16:00:00Z', 'ends_at' => '2026-10-30T15:00:00Z'])->assertUnprocessable();
+        $this->patchJson($url, ['starts_at' => '2026-10-30T12:30'])->assertUnprocessable()->assertJsonValidationErrors('ends_at');
+        $this->patchJson($url, ['ends_at' => '2026-10-30T10:00'])->assertUnprocessable();
+        $this->patchJson($url, ['starts_at' => '2026-10-30T11:00'])->assertOk()
+            ->assertJsonPath('data.starts_at', '2026-10-30T11:00');
+        $this->patchJson($url, ['ends_at' => '2026-10-30T12:30'])->assertOk()
+            ->assertJsonPath('data.ends_at', '2026-10-30T12:30');
+        $this->patchJson($url, ['starts_at' => '2026-10-30T14:00', 'ends_at' => '2026-10-30T15:00'])->assertOk();
+        $this->patchJson($url, ['starts_at' => '2026-10-30T17:00', 'ends_at' => '2026-10-30T16:00'])->assertUnprocessable();
         $this->patchJson($url, ['title' => null])->assertUnprocessable();
         $this->assertSame('2026-10-30 13:00:00.000000', $session->fresh()->getRawOriginal('starts_at'));
     }
@@ -403,7 +414,7 @@ class TrainingSessionApiTest extends TestCase
         $session = $this->training();
         $this->withCompetingWrite($session, ['ends_at' => '2026-10-30 10:30:00.000000'], function () use ($session) {
             try {
-                app(ManageTrainingSessions::class)->update($session, ['starts_at' => '2026-10-30T10:45:00Z']);
+                app(ManageTrainingSessions::class)->update($session, ['starts_at' => '2026-10-30T11:45']);
                 $this->fail('Partial edits must validate against the current database time bound.');
             } catch (ValidationException) {
                 $current = TrainingSession::findOrFail($session->id);

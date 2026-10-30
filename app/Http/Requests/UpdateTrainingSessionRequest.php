@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Rules\OffsetDateTime;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 
@@ -18,8 +17,8 @@ class UpdateTrainingSessionRequest extends FormRequest
         return [
             'title' => ['sometimes', 'required', 'string', 'max:255'],
             'location' => ['sometimes', 'required', 'string', 'max:255'],
-            'starts_at' => ['sometimes', 'required', new OffsetDateTime],
-            'ends_at' => ['sometimes', 'required', new OffsetDateTime],
+            'starts_at' => ['sometimes', 'required', 'date_format:Y-m-d\TH:i'],
+            'ends_at' => ['sometimes', 'required', 'date_format:Y-m-d\TH:i'],
             'price_huf' => ['missing'],
             'status' => ['missing'],
             'created_by' => ['missing'],
