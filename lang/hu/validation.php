@@ -2,6 +2,8 @@
 
 return [
     'enum' => 'A(z) :attribute értéke érvénytelen.',
+    'in' => 'A(z) :attribute értéke érvénytelen.',
+    'missing' => 'A(z) :attribute mező nem küldhető be.',
     'integer' => 'A(z) :attribute egész szám legyen.',
     'required' => 'A(z) :attribute megadása kötelező.',
     'string' => 'A(z) :attribute szöveg legyen.',
@@ -14,5 +16,9 @@ return [
         'name' => 'név', 'email' => 'emailcím', 'password' => 'jelszó',
         'approval_status' => 'jóváhagyási állapot', 'per_page' => 'oldalméret', 'page' => 'oldalszám',
         'password_confirmation' => 'jelszó megerősítése', 'token' => 'visszaállító kód',
+        'title' => 'cím', 'location' => 'helyszín', 'price_huf' => 'ár (Ft)',
+        'starts_at' => 'kezdési időpont', 'ends_at' => 'befejezési időpont',
+        'starts_from' => 'kezdőidőpont alsó határa', 'starts_before' => 'kezdőidőpont felső határa',
+        'status' => 'állapot', 'created_by' => 'létrehozó', 'cancellation_reason' => 'elmaradás indoka',
     ],
 ];

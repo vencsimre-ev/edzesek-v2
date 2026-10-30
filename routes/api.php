@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\ApproveUserController;
 use App\Http\Controllers\Api\V1\LinkParticipantUserController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ParticipantController;
+use App\Http\Controllers\Api\V1\TrainingSessionController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -11,6 +12,12 @@ Route::prefix('v1')->name('api.v1.')->middleware('auth:sanctum')->group(function
     Route::get('/me', [MeController::class, 'show'])->name('me');
 
     Route::middleware(['verified', 'approved', 'admin'])->group(function () {
+        Route::apiResource('training-sessions', TrainingSessionController::class)
+            ->parameters(['training-sessions' => 'trainingSession'])
+            ->only(['index', 'store', 'show', 'update']);
+        Route::post('/training-sessions/{trainingSession}/complete', [TrainingSessionController::class, 'complete'])->name('training-sessions.complete');
+        Route::post('/training-sessions/{trainingSession}/cancel', [TrainingSessionController::class, 'cancel'])->name('training-sessions.cancel');
+
         Route::apiResource('participants', ParticipantController::class)
             ->only(['index', 'store', 'show', 'update', 'destroy']);
         Route::post('/participants/{participant}/link-user', [LinkParticipantUserController::class, 'store'])

@@ -4,7 +4,8 @@ Mászóedzések, résztvevők, részvételek, bérletalkalmak és manuálisan
 rögzített befizetések kezelésére készülő webalkalmazás.
 
 A regisztráció, email-megerősítés, admin jóváhagyás és résztvevőkezelés elkészült.
-Az edzéskezelési funkciók később készülnek el.
+Az edzések adatmodellje és admin REST API-ja elkészült; edzéskezelő Blade-felület
+és edzésenkénti részvételi lista még nincs.
 
 ## Jelenlegi állapot
 
@@ -21,6 +22,7 @@ Az edzéskezelési funkciók később készülnek el.
 - Google-regisztráció és belépés Socialite-tal, explicit fiók-összekapcsolás.
 - Sanctum session alapú REST API: saját állapot, adminlista és jóváhagyás.
 - Résztvevőmodell, kereshető és lapozott admin CRUD, archiválás és explicit fiókkapcsolás.
+- TrainingSession REST API, UTC-időkezelés, tervezett/megtartott/elmaradt állapotok.
 - Interaktív adminlétrehozó és idempotens résztvevőpótló parancs, auth/API feature tesztek.
 
 ## Technológiák
@@ -235,8 +237,8 @@ Kézi böngészős ellenőrzés a helyi szerver és Mailpit mellett:
 6. Hibás vagy lejárt megerősítő link ne legyen elfogadható; már jóváhagyott
    fiók ismételt jóváhagyása ne küldjön második levelet.
 
-Az edzéskezelés még nincs megvalósítva. A Google-folyamat kézi ellenőrzése
-a következő szakaszban olvasható.
+Az edzések egyelőre az admin REST API-n kezelhetők. A Google-folyamat kézi
+ellenőrzése a következő szakaszban olvasható.
 
 ## Google-regisztráció és belépés
 
@@ -477,7 +479,7 @@ A név melletti kis ikon jelzi a kapcsolt bejelentkezési fiókot. Telefonszám 
 külön fiókoszlop nincs; név, email és telefonszám alapján továbbra is kereshető,
 lapozott. Új vendég létrehozható; a részletek oldalon szerkesztés és
 fiókkapcsolás érhető el, az archiválás egy visszafogott, lenyitható művelet.
-Az edzésrészvételek később, az edzéskezeléssel együtt jelennek majd meg.
+Az edzésrészvételek később, a külön Attendance funkcióval jelennek majd meg.
 A név/email/telefon keresés részszövegre keres, a `%` és `_` karaktert szó szerint kezeli.
 Az SQLite beépített `lower()` függvénye az ASCII betűknél kis-/nagybetűfüggetlen;
 az ékezetes betűknél a megfelelő írásmódot kell használni.
@@ -600,6 +602,204 @@ A megvalósításhoz használt hivatalos dokumentáció:
 [Laravel 13 Eloquent és soft delete](https://laravel.com/framework/docs/13.x/eloquent),
 [Laravel 13 policyk](https://laravel.com/framework/docs/13.x/authorization),
 [Laravel 13 validáció](https://laravel.com/framework/docs/13.x/validation).
+
+## Edzések: TrainingSession REST API
+
+A `TrainingSession` egy edzésesemény, a `Participant` a személytörzs.
+A kettőt később az `Attendance` köti össze, edzésenként és személyenként egyedi
+kapcsolattal. Egy személy több edzésen is részt vehet. Ebben az egységben
+Attendance, névsor, előzetes jelentkezés/reservation, bérlet, fizetés, QR és
+edzéskezelő Blade-felület nem készült. Az elmaradt edzésnek saját állapota van;
+az üres névsor nem jelenti azt, hogy az edzés elmaradt.
+
+### Adatmodell és állapotok
+
+A `training_sessions` mezői:
+
+| Mező | Jelentés |
+| --- | --- |
+| `id` | Edzés azonosítója |
+| `title` | Kötelező cím, legfeljebb 255 karakter |
+| `location` | Kötelező helyszín, legfeljebb 255 karakter; nincs külön helyszíntörzs |
+| `starts_at`, `ends_at` | UTC kezdés és befejezés; a kezdés mindig korábbi |
+| `price_huf` | Kötelező, nem negatív egész forintösszeg; 0 is megengedett |
+| `status` | `TrainingSessionStatus` backed enum, JSON-ban a szöveges értéke |
+| `cancellation_reason` | Opcionális elmaradási indok, legfeljebb 2000 karakter |
+| `created_by` | A létrehozó admin User idegen kulcsa, szerveroldalon kitöltve |
+| `created_at`, `updated_at` | Automatikus időbélyegek |
+
+Az ár az adott edzés saját adata; nincs globális árbeállítás. Korábbi edzést
+is lehet rögzíteni, az azonos vagy átfedő időpontú edzéseket nem tiltjuk.
+A létrehozó kapcsolata `creator()`; a foreign key megakadályozza a hivatkozott
+User törlését, nem törli kaszkáddal az edzést.
+
+| Állapot | Jelentés | Műveletek |
+| --- | --- | --- |
+| `scheduled` | Tervezett, alapértelmezett | Szerkeszthető, megtartottnak vagy elmaradtnak jelölhető |
+| `completed` | Megtartott | Lezárt, nem szerkeszthető és nem állítható vissza |
+| `cancelled` | Elmaradt | Lezárt, nem szerkeszthető és nem állítható vissza |
+
+Létrehozáskor `completed` is megadható történeti rögzítéshez, de kizárólag
+szigorúan múltbeli `ends_at` esetén. `cancelled` kezdőállapot nem engedélyezett.
+A `complete` művelet a befejezési időpont elérésekor már engedélyezett
+(`ends_at <= most`). A `cancel` jövőbeli és korábbi tervezett edzésre is működik.
+
+Csak `scheduled` edzés adatai módosíthatók. A `status`, `created_by` és
+`cancellation_reason` általános PATCH-ben nem küldhető be, még null vagy üres
+értékkel sem: 422-es validációs hiba. A létrehozás szintén elutasítja a kliensből
+küldött `created_by` és `cancellation_reason` mezőket. A hitelesített admint a
+szerver választja ki; másik admin későbbi szerkesztése nem cseréli le a létrehozót.
+
+Ismételt `complete` már megtartott edzésen 200-as sikeres no-op; ismételt
+`cancel` már elmaradt edzésen szintén 200, és megőrzi az első indokot.
+Az ismétlések az időbélyeget sem módosítják. Megtartott edzés elmaradtnak
+jelölése, elmaradt edzés megtartottnak jelölése és lezárt edzés szerkesztése 409.
+Túl korai `complete` 422. Törlési endpoint nincs: az elmaradt edzés megmarad.
+
+A `ManageTrainingSessions` actionben a szerkesztés és állapotváltás tranzakcióban
+fut. Az első adatbázis-művelet feltételes UPDATE: maga az adatbázis ellenőrzi
+az aktuális `scheduled` állapotot és szükség esetén az aktuális időhatárokat.
+Részleges időpontmódosításnál a tárolt másik határ szerepel a feltételben.
+Így egy régi modellpéldány vagy párhuzamos kérés nem írhat felül lezárást, illetve
+nem hozhat létre hibás időtartamot. Nem támaszkodunk SQLite-on sorzárra vagy
+`lockForUpdate()`-ra; Laravel a felismert zárolási ütközést legfeljebb öt
+tranzakciós próbálkozással kezeli. Két külön SQLite-kapcsolatos tesztek ellenőrzik
+az ütköző módosítás/lezárás és az első indok megőrzésének eseteit.
+
+### Időkezelés és listaszűrés
+
+Az alkalmazás meglévő `config/app.php` időzónája UTC maradt. Az API időpontjai
+RFC 3339 formátumúak: dátum, `T`, óra:perc:másodperc és explicit `Z` vagy
+`±HH:MM` eltolás szükséges. Legfeljebb hat törtmásodpercjegy megengedett.
+Időzóna nélküli, érvénytelen vagy csak dátumot tartalmazó érték 422-t ad.
+Tároláskor UTC-re normalizálunk, hat törtmásodpercjegyet őrzünk; a JSON-válasz
+ISO 8601 UTC (`Z`) értékeket ad. A többi modell időkezelését nem változtattuk.
+
+Europe/Budapest szerint október 30-án a `18:00:00+01:00` időpont
+`17:00:00Z`; nyári időszámításkor a budapesti eltolás `+02:00`.
+Az eltolást a kliens az adott időpontnak megfelelően küldi, az API nem találja ki.
+
+Listaszűrők:
+
+- `status`: `scheduled`, `completed` vagy `cancelled`.
+- `starts_from`: kezdőidőpont alsó határa, **beleértve** (`starts_at >= érték`).
+- `starts_before`: kezdőidőpont felső határa, **kizárva** (`starts_at < érték`).
+- `per_page`: 1–100, alapérték 20; `page`: pozitív egész.
+
+Az időszűrők is explicit időzónaeltolást igényelnek, összehasonlításuk UTC-ben
+zajlik. Mindkettő az edzés **kezdését** szűri; nem időszakok átfedését keresik.
+Üres vagy fordított intervallum nem ad találatot. A sorrend `starts_at DESC`,
+majd `id DESC`, így azonos kezdés esetén is stabil. A lapozási linkek megőrzik
+a validált szűrőket. URL-ben a `+` jelet `%2B` formában kell kódolni;
+a `URLSearchParams` ezt automatikusan elvégzi.
+
+### Endpointok és példák
+
+Minden endpoint session alapú Sanctum-hitelesítést és **verified + approved +
+admin** jogosultságot követel, middleware-rel és `TrainingSessionPolicy`-val.
+Student egyelőre nem fér hozzá. A controllerek névvel ellátott metódusokat,
+FormRequesteket és explicit `TrainingSessionResource` válaszokat használnak.
+
+| Endpoint | Sikeres válasz |
+| --- | --- |
+| GET `/api/v1/training-sessions` | 200, lapozott `data`, `links`, `meta` |
+| POST `/api/v1/training-sessions` | 201, `data`: TrainingSessionResource |
+| GET `/api/v1/training-sessions/{trainingSession}` | 200, `data`: TrainingSessionResource |
+| PATCH `/api/v1/training-sessions/{trainingSession}` | 200, `data`: TrainingSessionResource |
+| POST `/api/v1/training-sessions/{trainingSession}/complete` | 200, `data`: TrainingSessionResource |
+| POST `/api/v1/training-sessions/{trainingSession}/cancel` | 200, `data`: TrainingSessionResource |
+
+Létrehozási kérés Europe/Budapest időponttal, kitalált adatokkal:
+
+```json
+{
+  "title": "Minta mászóedzés",
+  "location": "Minta mászóterem",
+  "starts_at": "2026-10-30T18:00:00+01:00",
+  "ends_at": "2026-10-30T19:30:00+01:00",
+  "price_huf": 3000
+}
+```
+
+Példaválasz, a mintaazonosítókkal és időbélyegekkel:
+
+```json
+{
+  "data": {
+    "id": 1,
+    "title": "Minta mászóedzés",
+    "location": "Minta mászóterem",
+    "starts_at": "2026-10-30T17:00:00.000000Z",
+    "ends_at": "2026-10-30T18:30:00.000000Z",
+    "price_huf": 3000,
+    "status": "scheduled",
+    "cancellation_reason": null,
+    "created_by": 1,
+    "created_at": "2026-10-30T12:00:00.000000Z",
+    "updated_at": "2026-10-30T12:00:00.000000Z"
+  }
+}
+```
+
+A resource pontosan ezeket a mezőket tartalmazza; beágyazott User-modellt,
+jelszót, remember tokent és OAuth-adatot nem ad vissza.
+
+Belépett admin böngészőkonzoljából, a REST API szakaszban bemutatott CSRF-folyamattal
+és `xsrf()` segédfüggvénnyel:
+
+```javascript
+const headers = { Accept: 'application/json', 'Content-Type': 'application/json',
+    'X-XSRF-TOKEN': xsrf() };
+const filters = new URLSearchParams({ status: 'scheduled',
+    starts_from: '2026-10-30T00:00:00+01:00',
+    starts_before: '2026-10-31T00:00:00+01:00', per_page: '20' });
+await fetch(`/api/v1/training-sessions?${filters}`, {
+    credentials: 'same-origin', headers
+}).then(response => response.json());
+const trainingSessionId = 1; // Egy ténylegesen kiválasztott edzés azonosítója.
+await fetch(`/api/v1/training-sessions/${trainingSessionId}`, {
+    method: 'PATCH', credentials: 'same-origin', headers,
+    body: JSON.stringify({ price_huf: 3500 })
+});
+await fetch(`/api/v1/training-sessions/${trainingSessionId}/complete`, {
+    method: 'POST', credentials: 'same-origin', headers
+}); // Csak ends_at elérése után; egyébként 422.
+// Másik, még scheduled edzésnél az elmaradás rögzítése:
+await fetch('/api/v1/training-sessions/2/cancel', {
+    method: 'POST', credentials: 'same-origin', headers,
+    body: JSON.stringify({ cancellation_reason: 'Minta teremzárás' })
+});
+```
+
+Hibák: 401 nincs belépés; 403 hiányzó admin/megerősítés/jóváhagyás;
+404 hiányzó edzés; 422 hibás adatok, tiltott mezők vagy túl korai megtartottá
+jelölés; 409 tiltott állapotváltás vagy lezárt edzés módosítása. API-hibánál JSON
+érkezik, nincs HTML-átirányítás. A meglévő CSRF/session szabályok is érvényesek (419).
+
+### Migráció és ellenőrzés
+
+Meglévő helyi adatbázis frissítése adatvesztés nélkül:
+
+```bash
+php artisan migrate
+```
+
+Az új migráció csak a `training_sessions` táblát hozza létre. A fejlesztői
+adatbázison nem futtattunk migrációt ebben az egységben, csak külön tesztadatbázison.
+
+```bash
+php artisan test --filter=TrainingSessionApiTest
+php artisan test --testsuite=Feature
+vendor/bin/pint --test
+php artisan route:list --path=training-sessions -vv
+```
+
+A tesztek memóriabeli SQLite-adatbázist és a konkurens írások vizsgálatához
+ideiglenes, kizárólag teszt-mintaadatokat tartalmazó SQLite-fájlt használnak.
+Valódi böngészős/API-klienses kézi teszt ebben az egységben nem történt.
+Hivatalos dokumentáció: [Laravel 13 tranzakciók](https://laravel.com/framework/docs/13.x/database),
+[FormRequest és egyéni validációs szabály](https://laravel.com/framework/docs/13.x/validation),
+[JsonResource válaszok](https://laravel.com/framework/docs/13.x/eloquent-resources).
 
 ## Adatok és titkos konfiguráció
 
