@@ -37,7 +37,7 @@ class TrainingSessionApiTest extends TestCase
         return array_replace([
             'title' => 'Minta mászóedzés', 'location' => 'Minta mászóterem',
             'starts_at' => '2026-10-30T18:00:00+01:00',
-            'ends_at' => '2026-10-30T19:00:00+01:00', 'price_huf' => 3000,
+            'ends_at' => '2026-10-30T19:00:00+01:00',
         ], $overrides);
     }
 
@@ -51,18 +51,18 @@ class TrainingSessionApiTest extends TestCase
 
     public function test_admin_creates_scheduled_session_with_explicit_resource_and_utc_storage(): void
     {
-        $response = $this->postJson('/api/v1/training-sessions', $this->payload(['price_huf' => 0]))
+        $response = $this->postJson('/api/v1/training-sessions', $this->payload())
             ->assertCreated()->assertJsonPath('data.status', 'scheduled')
             ->assertJsonPath('data.starts_at', '2026-10-30T17:00:00.000000Z')
             ->assertJsonPath('data.ends_at', '2026-10-30T18:00:00.000000Z')
-            ->assertJsonPath('data.price_huf', 0)->assertJsonPath('data.created_by', $this->admin->id)
+            ->assertJsonMissingPath('data.price_huf')->assertJsonPath('data.created_by', $this->admin->id)
             ->assertJsonPath('data.cancellation_reason', null);
         $session = TrainingSession::sole();
         $this->assertSame('2026-10-30 17:00:00.000000', $session->getRawOriginal('starts_at'));
         $this->assertSame(TrainingSessionStatus::Scheduled, $session->status);
         $this->assertTrue($session->creator->is($this->admin));
         $this->getJson('/api/v1/training-sessions/'.$session->id)->assertExactJson($response->json());
-        $this->assertSame(['id', 'title', 'location', 'starts_at', 'ends_at', 'price_huf', 'status',
+        $this->assertSame(['id', 'title', 'location', 'starts_at', 'ends_at', 'status',
             'cancellation_reason', 'created_by', 'created_at', 'updated_at'], array_keys($response->json('data')));
         foreach (['user', 'creator', 'password', 'remember_token', 'google_id'] as $field) {
             $response->assertJsonMissingPath('data.'.$field);
@@ -71,6 +71,36 @@ class TrainingSessionApiTest extends TestCase
         $this->assertNotNull($session->updated_at);
         // No automatic overlap restriction.
         $this->postJson('/api/v1/training-sessions', $this->payload())->assertCreated();
+    }
+
+    public function test_price_is_retired_and_historical_values_are_preserved_without_exposure(): void
+    {
+        $session = $this->training();
+        DB::table('training_sessions')->where('id', $session->id)->update(['price_huf' => 2500]);
+        $url = '/api/v1/training-sessions/'.$session->id;
+        foreach ([2500, 0, null, ''] as $price) {
+            $this->postJson('/api/v1/training-sessions', $this->payload(['price_huf' => $price]))
+                ->assertUnprocessable()->assertJsonValidationErrors('price_huf');
+            $this->patchJson($url, ['price_huf' => $price])->assertUnprocessable()->assertJsonValidationErrors('price_huf');
+        }
+        $this->patchJson($url, ['title' => 'Ár nélküli edzés'])->assertOk()->assertJsonMissingPath('data.price_huf');
+        $this->getJson('/api/v1/training-sessions')->assertOk()->assertJsonMissingPath('data.0.price_huf');
+        $this->assertSame(2500, $session->fresh()->getRawOriginal('price_huf'));
+        $this->postJson('/api/v1/training-sessions', $this->payload())->assertCreated()->assertJsonMissingPath('data.price_huf');
+        $this->assertNull(TrainingSession::latest('id')->firstOrFail()->getRawOriginal('price_huf'));
+    }
+
+    public function test_retiring_price_migration_preserves_existing_amounts(): void
+    {
+        $session = $this->training();
+        DB::table('training_sessions')->where('id', $session->id)->update(['price_huf' => 2500]);
+        $migration = require database_path('migrations/2026_10_30_000001_retire_training_session_price.php');
+        $migration->down();
+        $this->assertSame(2500, $session->fresh()->getRawOriginal('price_huf'));
+        $migration->up();
+        $this->assertSame(2500, $session->fresh()->getRawOriginal('price_huf'));
+        $new = $this->training();
+        $this->assertNull($new->fresh()->getRawOriginal('price_huf'));
     }
 
     public function test_historical_completed_and_past_scheduled_sessions_can_be_created(): void
@@ -112,7 +142,7 @@ class TrainingSessionApiTest extends TestCase
             $this->postJson('/api/v1/training-sessions', $this->payload([$field => $value]))->assertUnprocessable();
         }
         $this->postJson('/api/v1/training-sessions', [])->assertUnprocessable()
-            ->assertJsonValidationErrors(['title', 'location', 'starts_at', 'ends_at', 'price_huf']);
+            ->assertJsonValidationErrors(['title', 'location', 'starts_at', 'ends_at']);
         $this->assertDatabaseCount('training_sessions', 0);
     }
 
@@ -141,14 +171,14 @@ class TrainingSessionApiTest extends TestCase
             'starts_before' => '2026-10-30T12:00:00+01:00', 'per_page' => 2]);
         $response = $this->getJson('/api/v1/training-sessions?'.$query)->assertOk()
             ->assertJsonPath('meta.total', 3)->assertJsonCount(2, 'data');
-        $this->assertSame([$lastTie->id, $firstTie->id], array_column($response->json('data'), 'id'));
+        $this->assertSame([$lower->id, $firstTie->id], array_column($response->json('data'), 'id'));
         parse_str(parse_url($response->json('links.next'), PHP_URL_QUERY), $next);
         $this->assertSame('scheduled', $next['status']);
         $this->assertSame('2026-10-30T10:00:00+01:00', $next['starts_from']);
         $this->assertSame('2026-10-30T12:00:00+01:00', $next['starts_before']);
         $this->assertSame('2', $next['per_page']);
         $this->getJson('/api/v1/training-sessions?'.$query.'&page=2')
-            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $lower->id);
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $lastTie->id);
         $this->getJson('/api/v1/training-sessions?status=cancelled')->assertJsonPath('data.0.id', $cancelled->id)->assertJsonPath('meta.total', 1);
         $this->getJson('/api/v1/training-sessions')->assertJsonPath('meta.total', 6)->assertJsonPath('meta.per_page', 20);
     }
@@ -166,8 +196,8 @@ class TrainingSessionApiTest extends TestCase
     {
         $session = $this->training();
         $url = '/api/v1/training-sessions/'.$session->id;
-        $this->patchJson($url, ['title' => 'Átnevezett edzés', 'location' => 'Másik mintaterem', 'price_huf' => 0])
-            ->assertOk()->assertJsonPath('data.title', 'Átnevezett edzés')->assertJsonPath('data.price_huf', 0);
+        $this->patchJson($url, ['title' => 'Átnevezett edzés', 'location' => 'Másik mintaterem'])
+            ->assertOk()->assertJsonPath('data.title', 'Átnevezett edzés')->assertJsonMissingPath('data.price_huf');
         $this->patchJson($url, ['starts_at' => '2026-10-30T11:30:00Z'])->assertUnprocessable()->assertJsonValidationErrors('ends_at');
         $this->patchJson($url, ['ends_at' => '2026-10-30T09:00:00Z'])->assertUnprocessable();
         $this->patchJson($url, ['starts_at' => '2026-10-30T12:00:00+02:00'])->assertOk()
@@ -176,7 +206,7 @@ class TrainingSessionApiTest extends TestCase
             ->assertJsonPath('data.ends_at', '2026-10-30T11:30:00.000000Z');
         $this->patchJson($url, ['starts_at' => '2026-10-30T13:00:00Z', 'ends_at' => '2026-10-30T14:00:00Z'])->assertOk();
         $this->patchJson($url, ['starts_at' => '2026-10-30T16:00:00Z', 'ends_at' => '2026-10-30T15:00:00Z'])->assertUnprocessable();
-        $this->patchJson($url, ['title' => null, 'price_huf' => -1])->assertUnprocessable();
+        $this->patchJson($url, ['title' => null])->assertUnprocessable();
         $this->assertSame('2026-10-30 13:00:00.000000', $session->fresh()->getRawOriginal('starts_at'));
     }
 
@@ -258,7 +288,7 @@ class TrainingSessionApiTest extends TestCase
         $session = $this->training();
         $url = '/api/v1/training-sessions';
         $operations = [['get', $url], ['post', $url], ['get', $url.'/'.$session->id],
-            ['patch', $url.'/'.$session->id], ['post', $url.'/'.$session->id.'/complete'], ['post', $url.'/'.$session->id.'/cancel']];
+            ['patch', $url.'/'.$session->id], ['delete', $url.'/'.$session->id], ['post', $url.'/'.$session->id.'/complete'], ['post', $url.'/'.$session->id.'/cancel']];
         Auth::forgetGuards();
         $this->app['auth']->guard('web')->logout();
         foreach ($operations as [$method, $endpoint]) {
@@ -277,16 +307,28 @@ class TrainingSessionApiTest extends TestCase
         $this->assertSame(TrainingSessionStatus::Scheduled, $session->fresh()->status);
     }
 
-    public function test_missing_sessions_are_json_404_and_delete_is_not_exposed(): void
+    public function test_missing_sessions_return_json_404(): void
     {
         $url = '/api/v1/training-sessions/99999';
         $this->get($url)->assertNotFound()->assertHeader('Content-Type', 'application/json');
         $this->patchJson($url, ['title' => 'Minta'])->assertNotFound();
         $this->postJson($url.'/complete')->assertNotFound();
         $this->postJson($url.'/cancel')->assertNotFound();
-        $session = $this->training();
-        $this->delete('/api/v1/training-sessions/'.$session->id)->assertStatus(405)->assertHeader('Content-Type', 'application/json');
-        $this->assertNotNull($session->fresh());
+        $this->delete($url)->assertNotFound()->assertHeader('Content-Type', 'application/json');
+    }
+
+    public function test_admin_can_physically_delete_sessions_in_every_state_without_deleting_creator(): void
+    {
+        foreach (TrainingSessionStatus::cases() as $status) {
+            $session = $this->training(['status' => $status]);
+            $url = '/api/v1/training-sessions/'.$session->id;
+            $this->delete($url)->assertNoContent()->assertContent('');
+            $this->assertDatabaseMissing('training_sessions', ['id' => $session->id]);
+            $this->assertDatabaseHas('users', ['id' => $this->admin->id]);
+            $this->get($url)->assertNotFound();
+            $this->delete($url)->assertNotFound()->assertHeader('Content-Type', 'application/json');
+        }
+        $this->getJson('/api/v1/training-sessions')->assertJsonPath('meta.total', 0);
     }
 
     public function test_completion_rechecks_current_end_time_instead_of_a_stale_model(): void

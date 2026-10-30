@@ -15,7 +15,6 @@ class TrainingSessionFactory extends Factory
             'location' => 'Minta mászóterem',
             'starts_at' => now()->addDay(),
             'ends_at' => now()->addDay()->addHour(),
-            'price_huf' => 3000,
             'status' => TrainingSessionStatus::Scheduled,
             'created_by' => User::factory()->admin(),
         ];

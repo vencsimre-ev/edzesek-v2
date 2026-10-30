@@ -14,7 +14,7 @@ Route::prefix('v1')->name('api.v1.')->middleware('auth:sanctum')->group(function
     Route::middleware(['verified', 'approved', 'admin'])->group(function () {
         Route::apiResource('training-sessions', TrainingSessionController::class)
             ->parameters(['training-sessions' => 'trainingSession'])
-            ->only(['index', 'store', 'show', 'update']);
+            ->only(['index', 'store', 'show', 'update', 'destroy']);
         Route::post('/training-sessions/{trainingSession}/complete', [TrainingSessionController::class, 'complete'])->name('training-sessions.complete');
         Route::post('/training-sessions/{trainingSession}/cancel', [TrainingSessionController::class, 'cancel'])->name('training-sessions.cancel');
 

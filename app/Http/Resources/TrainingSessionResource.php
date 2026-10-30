@@ -15,7 +15,6 @@ class TrainingSessionResource extends JsonResource
             'location' => $this->location,
             'starts_at' => $this->starts_at->utc()->toISOString(),
             'ends_at' => $this->ends_at->utc()->toISOString(),
-            'price_huf' => $this->price_huf,
             'status' => $this->status->value,
             'cancellation_reason' => $this->cancellation_reason,
             'created_by' => $this->created_by,

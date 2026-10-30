@@ -23,7 +23,7 @@ class StoreTrainingSessionRequest extends FormRequest
             'location' => ['required', 'string', 'max:255'],
             'starts_at' => ['required', new OffsetDateTime],
             'ends_at' => ['required', new OffsetDateTime],
-            'price_huf' => ['required', 'integer', 'min:0'],
+            'price_huf' => ['missing'],
             'status' => ['sometimes', Rule::in([TrainingSessionStatus::Scheduled->value, TrainingSessionStatus::Completed->value])],
             'created_by' => ['missing'],
             'cancellation_reason' => ['missing'],

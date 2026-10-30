@@ -36,4 +36,9 @@ class TrainingSessionPolicy
     {
         return $this->viewAny($user);
     }
+
+    public function delete(User $user, TrainingSession $trainingSession): bool
+    {
+        return $this->viewAny($user);
+    }
 }

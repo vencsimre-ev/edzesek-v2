@@ -12,6 +12,7 @@ use App\Http\Requests\UpdateTrainingSessionRequest;
 use App\Http\Resources\TrainingSessionResource;
 use App\Models\TrainingSession;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
 class TrainingSessionController extends Controller
@@ -36,6 +37,14 @@ class TrainingSessionController extends Controller
     public function update(UpdateTrainingSessionRequest $request, TrainingSession $trainingSession, ManageTrainingSessions $sessions): TrainingSessionResource
     {
         return new TrainingSessionResource($sessions->update($trainingSession, $request->validated()));
+    }
+
+    public function destroy(TrainingSession $trainingSession, ManageTrainingSessions $sessions): Response
+    {
+        Gate::authorize('delete', $trainingSession);
+        $sessions->delete($trainingSession);
+
+        return response()->noContent();
     }
 
     public function complete(CompleteTrainingSessionRequest $request, TrainingSession $trainingSession, ManageTrainingSessions $sessions): TrainingSessionResource

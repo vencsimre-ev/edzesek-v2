@@ -13,13 +13,29 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class ManageTrainingSessions
 {
+    public function defaults(): TrainingSession
+    {
+        $now = CarbonImmutable::now('Europe/Budapest');
+        $startsAt = $now->startOfWeek(CarbonImmutable::MONDAY)->addDays(3)->setTime(18, 0);
+        if ($startsAt->lt($now)) {
+            $startsAt = $startsAt->addWeek();
+        }
+
+        return new TrainingSession([
+            'title' => 'Mászóedzés',
+            'location' => 'Fless!Buda boulder',
+            'starts_at' => $startsAt->utc(),
+            'ends_at' => $startsAt->addHours(2)->utc(),
+        ]);
+    }
+
     public function paginate(array $filters): LengthAwarePaginator
     {
         return TrainingSession::query()
             ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
             ->when(isset($filters['starts_from']), fn ($query) => $query->where('starts_at', '>=', $this->utc($filters['starts_from'])))
             ->when(isset($filters['starts_before']), fn ($query) => $query->where('starts_at', '<', $this->utc($filters['starts_before'])))
-            ->orderByDesc('starts_at')->orderByDesc('id')
+            ->orderBy('starts_at')->orderBy('id')
             ->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1)
             ->appends($filters);
     }
@@ -37,7 +53,7 @@ class ManageTrainingSessions
         }
 
         $trainingSession = new TrainingSession;
-        $trainingSession->fill(array_intersect_key($data, array_flip(['title', 'location', 'starts_at', 'ends_at', 'price_huf'])));
+        $trainingSession->fill(array_intersect_key($data, array_flip(['title', 'location', 'starts_at', 'ends_at'])));
         $trainingSession->status = $status;
         $trainingSession->created_by = $admin->id;
         $trainingSession->save();
@@ -47,7 +63,7 @@ class ManageTrainingSessions
 
     public function update(TrainingSession $trainingSession, array $data): TrainingSession
     {
-        $data = $this->normalizeDates(array_intersect_key($data, array_flip(['title', 'location', 'starts_at', 'ends_at', 'price_huf'])));
+        $data = $this->normalizeDates(array_intersect_key($data, array_flip(['title', 'location', 'starts_at', 'ends_at'])));
         if (isset($data['starts_at'], $data['ends_at'])) {
             $this->validateDuration($data['starts_at'], $data['ends_at']);
         }
@@ -105,6 +121,13 @@ class ManageTrainingSessions
             }
 
             return $current;
+        }, 5);
+    }
+
+    public function delete(TrainingSession $trainingSession): void
+    {
+        DB::transaction(function () use ($trainingSession) {
+            abort_unless(TrainingSession::query()->whereKey($trainingSession->id)->delete(), 404);
         }, 5);
     }
 

@@ -20,7 +20,7 @@ class UpdateTrainingSessionRequest extends FormRequest
             'location' => ['sometimes', 'required', 'string', 'max:255'],
             'starts_at' => ['sometimes', 'required', new OffsetDateTime],
             'ends_at' => ['sometimes', 'required', new OffsetDateTime],
-            'price_huf' => ['sometimes', 'required', 'integer', 'min:0'],
+            'price_huf' => ['missing'],
             'status' => ['missing'],
             'created_by' => ['missing'],
             'cancellation_reason' => ['missing'],

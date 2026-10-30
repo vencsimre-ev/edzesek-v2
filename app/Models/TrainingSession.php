@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['title', 'location', 'starts_at', 'ends_at', 'price_huf'])]
+#[Fillable(['title', 'location', 'starts_at', 'ends_at'])]
 class TrainingSession extends Model
 {
     use HasFactory;
@@ -20,7 +20,6 @@ class TrainingSession extends Model
         return [
             'starts_at' => 'immutable_datetime',
             'ends_at' => 'immutable_datetime',
-            'price_huf' => 'integer',
             'status' => TrainingSessionStatus::class,
         ];
     }
