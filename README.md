@@ -1070,7 +1070,8 @@ a már létrehozott személyt válaszd a meglévő résztvevők közül.
 Az új Participant és Attendance egy tranzakcióban jön létre. Sikertelen
 részvételmentés vagy egyediségi konfliktus nem hagy fölösleges vendégrekordot.
 Meglévő személy ismételt hozzáadása 409, nem duplikáció és nem sikeres no-op.
-A rögzítő `created_by` mindig a belépett admin, beküldése validációs hiba.
+Admin névsorkezelésnél a `created_by` mindig a belépett admin. Önálló
+bejelentkezésnél a saját User, vendégnél null. A mezőt a kliens nem állíthatja.
 
 **Részvételekkel rendelkező edzés nem törölhető és nem jelölhető elmaradtnak.**
 Az API 409-et, a web érthető magyar hibaüzenetet ad; a felület is jelzi, hogy
@@ -1185,6 +1186,93 @@ hozott alkalmak változatlanul későbbi követelmények.
 Hivatalos dokumentáció: [Laravel 13 resource controllerek és scoped route-ok](https://laravel.com/framework/docs/13.x/controllers),
 [FormRequest-validáció](https://laravel.com/framework/docs/13.x/validation),
 [Eloquent-kapcsolatok](https://laravel.com/framework/docs/13.x/eloquent-relationships).
+
+### Résztvevői „Edzésre jöttem” oldal
+
+A fejlécből és a belépett felhasználó kezdőoldaláról elérhető:
+`GET /edzesre-jottem`. A korábbi Bootstrap-felület egyszerű névmezőjét és
+visszajelzését követi, Google Spreadsheet helyett a meglévő Participant és
+Attendance rekordokba ment. Az eredeti alkalmazást nem módosítja.
+
+- A felső részen az edzés dátuma, kezdése–befejezése és helyszíne látszik.
+- Az előző 7 nap és a következő 8 hét kezdési időpontjai közül választhatunk,
+  a határokat beleértve, elmaradt edzés nélkül. A már folyamatban lévő az
+  alapérték; egyébként a kezdés szerint legközelebbi, holtversenyben a későbbi.
+  Másik edzés a lenyíló listából a **Kiválasztás** gombbal választható.
+- Vendégnek csak név kell: új Participant készül User-fiók nélkül. Névazonosság
+  alapján senkit nem kapcsolunk össze. Az új személy és részvétel közös
+  tranzakcióban mentődik. A régi űrlaphoz hasonlóan a böngésző megjegyezheti a
+  nevet; ez kényelmi kitöltés, nem személyazonosítás.
+- Belépve a saját név látszik, a szerver a fiók saját, aktív Participant rekordját
+  használja. Másik `participant_id` nem küldhető. Az edző/admin első saját
+  részvételekor, ha még nincs személyrekordja, az a fiókjához kapcsolva, a saját
+  nevével és emailjével létrejön, a részvétellel egy tranzakcióban. Névegyezés
+  alapján itt sem kapcsolunk másik személyt. Archivált kapcsolatot nem állítunk
+  vissza automatikusan. Studentnél hiányzó, illetve bárkinél archivált kapcsolatnál
+  403 és edzői segítséget kérő üzenet érkezik, nincs vendégként visszaesés.
+  Az email-megerősítés és adminjóváhagyás itt is szükséges. Korlátozott fiók
+  weben a meglévő megerősítő/jóváhagyási oldalra kerül, API-n 403-at kap.
+- Siker: **Rögzítettük a részvételedet.**, az edzés dátumával. Meglévő saját
+  részvételnél: **Erre az edzésre már rögzítettük a részvételedet.** Új sor nincs.
+- Sikeres új mentés után ugyanannak a böngésző-sessionnek 60 másodpercig kell
+  várnia, más edzés választásakor is. Látható visszaszámlálás és szerveroldali
+  Laravel RateLimiter védi; a sessionben tárolt böngészőazonosítóhoz tartozó
+  rövid cache-lock az egyidejű beküldéseket is elkülöníti. Másik telefon vagy
+  másik böngésző-session közben használhatja. Validációs hiba és már meglévő
+  részvétel nem indít új várakozást. Ez a sessionhöz kötött duplázásvédelem,
+  nem személyazonosság-ellenőrzés; cookie-törléssel új session keletkezik.
+- A meglévő vendég-`submission_id` továbbra is védi az azonos kérés ismétlését;
+  nem készült új idempotencia-tábla. Elmaradt vagy időablakon kívüli edzés
+  szerveroldalon sem fogadható el. Az adminműveletek jogosultsága változatlan.
+
+A Blade hagyományos, CSRF-védett POST-ot küld a web controllernek; a saját
+backendhez nem indít HTTP API-kérést. A webes és API-controller közösen a meglévő
+`ManageAttendances` actiont és a `CheckInRequest` validációt használja.
+
+| REST végpont | Működés |
+| --- | --- |
+| GET `/api/v1/check-ins` | Biztonságos edzésválasztó adatok, alapértelmezett edzés, saját állapot és hátralévő várakozás |
+| POST `/api/v1/check-ins` | Saját részvétel rögzítése: 201, már meglévő saját részvétel: 200 |
+
+GET-en opcionális `training_session_id` adható. POST-nál ez kötelező.
+Vendég POST-példa, kizárólag mintaadatokkal:
+
+```json
+{"training_session_id": 5, "name": "Minta Vendég", "submission_id": "21c5516e-4598-4c01-99d8-dd45f4675132"}
+```
+
+Belépett fióknál csak `{"training_session_id": 5}` küldendő. A kliensből érkező
+`participant_id`, `created_by`, `user_id`, illetve belépve a `name` és
+`submission_id` elutasított mező. Vendégnél a név legfeljebb 255 karakter,
+a küldésazonosító UUID, ahogy az admin vendégfelvételnél is.
+
+A JSON explicit mezői: `training_session` (`id`, `date`, `starts_at`, `ends_at`,
+`location`), `already_recorded`, `retry_after`, `message`; GET-en emellett
+`training_sessions` és a saját `name` (vendégnél null). Nincs személytörzs,
+mások névsora, belső megjegyzés vagy auth-adat. Időpont: helyi `Y-m-dTH:i`.
+Nincs választható edzés esetén a kiválasztott érték null, a lista üres.
+
+A publikus API is a meglévő webes sessiont és CSRF-et használja, új token nélkül.
+Először GET-tel nyiss sessiont, és a meglévő CSRF-folyamat szerint küldd a
+session cookie-t és `X-XSRF-TOKEN` headert (azonos originű böngészőből).
+Hibák: 403 korlátozott fiók/hiányzó aktív személykapcsolat; 419 CSRF;
+422 érvénytelen bemenet vagy nem választható edzés; 409 ismételt vendégűrlap;
+429 várakozás, `Retry-After` headerrel. Az API hibái JSON-válaszok.
+
+A `2026_11_01_000000_allow_guest_attendance_creator` migráció csak az Attendance
+`created_by` mezőjét teszi nullable-vé; az idegen kulcs megmarad. Vendég helyett
+nem választunk ki admint. A visszavonás vendégrészvétel jelenlétében megáll,
+adatot nem töröl és nem rendel önkényesen másik felhasználóhoz.
+
+Ellenőrzés: `php artisan test --filter=CheckInTest`, az érintett Attendance-,
+TrainingSession- és auth-tesztek, `vendor/bin/pint --test`, `npm run build`.
+Kézzel: vendég névvel mentése; visszaszámlálás és újratöltés; másik böngészőből
+párhuzamos mentés; belépett student saját részvétele és ismétlése; edzésváltás;
+pending/unverified fiók tiltása; adminnévsorban a mentett részvétel megjelenése.
+
+Nincs bérletlevonás, fizetés, QR, értesítő email vagy új ütemezés.
+Hivatalos háttér: [Laravel 13 session](https://laravel.com/framework/docs/13.x/session),
+[cache-lockok](https://laravel.com/framework/docs/13.x/cache#atomic-locks).
 
 ### Későbbi résztvevői alkalom- és díjkezelés
 

@@ -16,6 +16,7 @@
                 Edzések v2
             </a>
             <nav aria-label="Fő navigáció" class="d-flex gap-3 align-items-center">
+                <a href="{{ route('check-in.index') }}" class="text-white">Edzésre jöttem</a>
                 @auth
                     <a href="{{ route('home') }}" class="text-white">Kezdőoldal</a>
                     <form method="POST" action="{{ route('logout') }}">

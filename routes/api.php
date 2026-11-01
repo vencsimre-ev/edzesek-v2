@@ -2,12 +2,18 @@
 
 use App\Http\Controllers\Api\V1\ApproveUserController;
 use App\Http\Controllers\Api\V1\AttendanceController;
+use App\Http\Controllers\Api\V1\CheckInController;
 use App\Http\Controllers\Api\V1\LinkParticipantUserController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\ParticipantController;
 use App\Http\Controllers\Api\V1\TrainingSessionController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware('web')->prefix('v1')->name('api.v1.')->group(function () {
+    Route::get('/check-ins', [CheckInController::class, 'index'])->name('check-ins.index');
+    Route::post('/check-ins', [CheckInController::class, 'store'])->name('check-ins.store');
+});
 
 Route::post('/v1/training-sessions/sync-weekly', [TrainingSessionController::class, 'syncWeekly'])
     ->name('api.v1.training-sessions.sync-weekly');

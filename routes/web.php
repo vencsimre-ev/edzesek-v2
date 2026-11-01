@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Web\ApprovalController;
 use App\Http\Controllers\Web\AttendanceController;
+use App\Http\Controllers\Web\CheckInController;
 use App\Http\Controllers\Web\GoogleAuthController;
 use App\Http\Controllers\Web\LinkParticipantUserController;
 use App\Http\Controllers\Web\ParticipantController;
@@ -11,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome');
+Route::get('/edzesre-jottem', [CheckInController::class, 'index'])->name('check-in.index');
+Route::post('/edzesre-jottem', [CheckInController::class, 'store'])->name('check-in.store');
 
 Route::get('/approval-pending', function (Request $request) {
     return $request->user()->isApproved()
