@@ -8,8 +8,9 @@
     <title>@yield('title', 'Edzések v2')</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @stack('head')
 </head>
-<body>
+<body class="@yield('body-class')">
     <header class="bg-dark text-white">
         <div class="container py-3 d-flex flex-wrap gap-3 justify-content-between align-items-center">
             <a href="{{ url('/') }}" class="text-white text-decoration-none fs-4">
@@ -31,7 +32,7 @@
         </div>
     </header>
 
-    <main class="container py-5">
+    <main class="@yield('main-class', 'container py-5')">
         @if(session('message'))
             <div class="alert alert-success" role="status">{{ session('message') }}</div>
         @endif

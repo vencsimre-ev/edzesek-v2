@@ -12,6 +12,15 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CheckInController extends Controller
 {
+    public function welcome(ManageAttendances $attendances): View
+    {
+        $sessions = $attendances->checkInSessions(includeCancelled: true)
+            ->where('ends_at', '>', now()->utc()->format('Y-m-d H:i:s.u'))
+            ->orderBy('starts_at')->orderBy('id')->get(['id', 'starts_at', 'ends_at', 'location', 'status']);
+
+        return view('welcome', compact('sessions'));
+    }
+
     public function index(CheckInRequest $request, ManageAttendances $attendances): View
     {
         $data = $attendances->checkInPage($request->filled('training_session_id') ? $request->integer('training_session_id') : null,

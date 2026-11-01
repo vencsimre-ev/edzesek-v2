@@ -75,9 +75,9 @@ class ManageAttendances
         $attendance->delete();
     }
 
-    public function checkInSessions(): Builder
+    public function checkInSessions(bool $includeCancelled = false): Builder
     {
-        return TrainingSession::query()->where('status', '!=', TrainingSessionStatus::Cancelled)
+        return TrainingSession::query()->when(! $includeCancelled, fn ($query) => $query->where('status', '!=', TrainingSessionStatus::Cancelled))
             ->where('starts_at', '>=', now()->subDays(7)->utc()->format('Y-m-d H:i:s.u'))
             ->where('starts_at', '<=', now()->addWeeks(8)->utc()->format('Y-m-d H:i:s.u'));
     }

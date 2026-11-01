@@ -74,6 +74,36 @@ class CheckInTest extends TestCase
         $this->assertDatabaseCount('attendances', 0);
     }
 
+    public function test_public_landing_lists_database_sessions_and_links_to_the_selected_check_in(): void
+    {
+        $current = $this->training();
+        $next = $this->training('2026-11-12 18:00', '2026-11-12 20:00', ['location' => 'Minta következő helyszín']);
+        $cancelled = $this->training('2026-11-19 18:00', '2026-11-19 20:00', [
+            'status' => TrainingSessionStatus::Cancelled, 'cancellation_reason' => 'PRIVATE_SAMPLE_REASON',
+        ]);
+        $this->training('2026-11-04 18:00', '2026-11-04 20:00', ['location' => 'Régi minta helyszín']);
+        $this->training('2027-02-04 18:00', '2027-02-04 20:00', ['location' => 'Távoli minta helyszín']);
+
+        $link = route('check-in.index', ['training_session_id' => $next->id]);
+        $this->get('/')->assertOk()->assertSee('Mászóedzések a Fless!Budában')->assertSee('Rólam')
+            ->assertSee('Minta következő helyszín')->assertSee('Elmarad')->assertSee($link)
+            ->assertSee(route('login'))->assertSee('images/vencsimi.jpg')
+            ->assertDontSee(route('check-in.index', ['training_session_id' => $cancelled->id]))
+            ->assertDontSee('PRIVATE_SAMPLE_REASON')->assertDontSee('Régi minta helyszín')->assertDontSee('Távoli minta helyszín')
+            ->assertViewHas('sessions', fn ($sessions) => $sessions->pluck('id')->all() === [$current->id, $next->id, $cancelled->id]);
+        $this->get($link)->assertOk()->assertViewHas('selected', fn ($selected) => $selected->is($next))
+            ->assertSee('value="'.$next->id.'" selected', false);
+        $this->assertDatabaseCount('attendances', 0);
+    }
+
+    public function test_public_landing_is_available_without_sessions_and_to_restricted_accounts(): void
+    {
+        $this->get('/')->assertOk()->assertSee('Jelenleg nincs meghirdetett edzés.')->assertSee(route('login'));
+        $this->actingAs(User::factory()->create(), 'web');
+        $this->get('/')->assertOk()->assertSee('Mászóedzések a Fless!Budában')->assertSee(route('logout'));
+        $this->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
+    }
+
     public function test_nearest_start_and_later_tie_break_and_manual_selection(): void
     {
         $before = $this->training('2026-11-05 17:30', '2026-11-05 18:00');

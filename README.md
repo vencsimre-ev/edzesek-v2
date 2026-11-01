@@ -1187,6 +1187,28 @@ Hivatalos dokumentáció: [Laravel 13 resource controllerek és scoped route-ok]
 [FormRequest-validáció](https://laravel.com/framework/docs/13.x/validation),
 [Eloquent-kapcsolatok](https://laravel.com/framework/docs/13.x/eloquent-relationships).
 
+### Publikus bemutatkozó oldal és edzéslista
+
+A `/` főoldal a megadott Fless Buda bemutatkozó oldal zöld–barack megjelenését,
+bemutatkozó szövegét, edzőfotóját, elérhetőségét és tájékoztató díjait használja.
+A fejlécben a meglévő belépés/regisztráció, belépve a kezdőoldal és kijelentkezés
+érhető el. A bemutatkozó oldal bejelentkezés és jóváhagyás nélkül is olvasható.
+
+A **Következő edzések** adatbázisból, időrendben mutatja a még be nem fejeződött
+alkalmakat a következő nyolc hétre. A dátum, időpont és helyszín az edzésrekordból
+jön. Elmaradt edzés mellett **Elmarad** felirat látható, részvételi gomb nincs.
+Üres listánál érthető üzenet jelenik meg; nincs statikus mintadátum.
+
+A **Részt veszek!** gomb az adott edzés
+`/edzesre-jottem?training_session_id=...` oldalára visz. A lenyílóban már ez az
+edzés van kiválasztva, külön kiválasztás nélkül beküldhető a meglévő űrlap.
+A kattintás önmagában nem ment részvételt. A meglévő fiókállapot-, CSRF-,
+edzésválasztási és 60 másodperces szabályok továbbra is érvényesek.
+A publikus listában névsor és belső elmaradási indok nem jelenik meg.
+
+A statikus referenciaoldal érintetlen maradt; a fotó helyi másolata
+`public/images/vencsimi.jpg`. A dizájn stílusai elkülönülnek az adminfelülettől.
+
 ### Résztvevői „Edzésre jöttem” oldal
 
 A fejlécből és a belépett felhasználó kezdőoldaláról elérhető:
