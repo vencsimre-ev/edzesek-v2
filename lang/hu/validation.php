@@ -17,6 +17,8 @@ return [
         'name' => 'név', 'email' => 'emailcím', 'password' => 'jelszó',
         'approval_status' => 'jóváhagyási állapot', 'per_page' => 'oldalméret', 'page' => 'oldalszám',
         'password_confirmation' => 'jelszó megerősítése', 'token' => 'visszaállító kód',
+        'participant_id' => 'résztvevő', 'participant_search' => 'névkeresés',
+        'submission_id' => 'küldésazonosító', 'participants_page' => 'résztvevőlista oldalszáma',
         'title' => 'cím', 'location' => 'helyszín', 'price_huf' => 'ár (Ft)',
         'starts_at' => 'kezdési időpont', 'ends_at' => 'befejezési időpont',
         'starts_from' => 'kezdőidőpont alsó határa', 'starts_before' => 'kezdőidőpont felső határa',

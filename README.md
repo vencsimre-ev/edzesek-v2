@@ -5,7 +5,7 @@ rögzített befizetések kezelésére készülő webalkalmazás.
 
 A regisztráció, email-megerősítés, admin jóváhagyás és résztvevőkezelés elkészült.
 Az edzések adatmodellje, admin REST API-ja és magyar Blade-adminfelülete elkészült.
-Edzésenkénti részvételi lista még nincs.
+Az edzésekhez manuális részvételi névsor is kezelhető.
 
 ## Jelenlegi állapot
 
@@ -22,8 +22,10 @@ Edzésenkénti részvételi lista még nincs.
 - Google-regisztráció és belépés Socialite-tal, explicit fiók-összekapcsolás.
 - Sanctum session alapú REST API: saját állapot, adminlista és jóváhagyás.
 - Résztvevőmodell, kereshető és lapozott admin CRUD, archiválás és explicit fiókkapcsolás.
-- TrainingSession REST API és Blade-adminfelület, UTC-tárolás és budapesti megjelenítés,
-  tervezett/megtartott/elmaradt állapotok.
+- TrainingSession REST API és Blade-adminfelület, egyszerű helyi időbevitel,
+  tervezett/megtartott/elmaradt állapotok, végleges edzéstörlés.
+- Nyolchetes fix csütörtöki edzésrend automatikus pótlása és napi lezárás.
+- Edzésenkénti manuális részvételi lista, aktív résztvevő kiválasztásával és új vendég hozzáadásával.
 - Interaktív adminlétrehozó és idempotens résztvevőpótló parancs, auth/API feature tesztek.
 
 ## Technológiák
@@ -480,7 +482,7 @@ A név melletti kis ikon jelzi a kapcsolt bejelentkezési fiókot. Telefonszám 
 külön fiókoszlop nincs; név, email és telefonszám alapján továbbra is kereshető,
 lapozott. Új vendég létrehozható; a részletek oldalon szerkesztés és
 fiókkapcsolás érhető el, az archiválás egy visszafogott, lenyitható művelet.
-Az edzésrészvételek később, a külön Attendance funkcióval jelennek majd meg.
+Az edzésenkénti részvételek az edzés adatlapján, külön Attendance-névsorban kezelhetők.
 A név/email/telefon keresés részszövegre keres, a `%` és `_` karaktert szó szerint kezeli.
 Az SQLite beépített `lower()` függvénye az ASCII betűknél kis-/nagybetűfüggetlen;
 az ékezetes betűknél a megfelelő írásmódot kell használni.
@@ -607,9 +609,9 @@ A megvalósításhoz használt hivatalos dokumentáció:
 ## Edzések: TrainingSession REST API
 
 A `TrainingSession` egy edzésesemény, a `Participant` a személytörzs.
-A kettőt később az `Attendance` köti össze, edzésenként és személyenként egyedi
-kapcsolattal. Egy személy több edzésen is részt vehet. Ebben az egységben
-Attendance, névsor, előzetes jelentkezés/reservation, bérlet, fizetés és QR
+A kettőt az `Attendance` köti össze, edzésenként és személyenként egyedi
+kapcsolattal. Egy személy több edzésen is részt vehet. A névsor tényleges
+részvételt rögzít; előzetes jelentkezés/reservation, bérlet, fizetés és QR
 nem készült. Az elmaradt edzésnek saját állapota van;
 az üres névsor nem jelenti azt, hogy az edzés elmaradt.
 
@@ -652,8 +654,10 @@ A `complete` művelet a befejezési időpont elérésekor már engedélyezett
 Csak `scheduled` edzés adatai módosíthatók. A `status`, `created_by` és
 `cancellation_reason` általános PATCH-ben nem küldhető be, még null vagy üres
 értékkel sem: 422-es validációs hiba. A létrehozás szintén elutasítja a kliensből
-küldött `created_by` és `cancellation_reason` mezőket. A hitelesített admint a
-szerver választja ki; másik admin későbbi szerkesztése nem cseréli le a létrehozót.
+küldött `created_by` és `cancellation_reason` mezőket. Kézi létrehozásnál a
+hitelesített admint a szerver választja ki; automatikus létrehozásnál a később
+leírt cron-végpont választ megerősített, jóváhagyott admint. Másik admin
+későbbi szerkesztése nem cseréli le a létrehozót.
 
 Ismételt `complete` már megtartott edzésen 200-as sikeres no-op; ismételt
 `cancel` már elmaradt edzésen szintén 200, és megőrzi az első indokot.
@@ -661,7 +665,8 @@ Az ismétlések az időbélyeget sem módosítják. Megtartott edzés elmaradtna
 jelölése, elmaradt edzés megtartottnak jelölése és lezárt edzés szerkesztése 409.
 Túl korai `complete` 422. Az elmaradás jelölése megőrzi az edzést.
 Külön DELETE művelettel az admin bármely állapotú edzést véglegesen, fizikailag
-törölhet. Ez nem archiválás: a sor eltűnik az adatbázisból, nem állítható vissza.
+törölhet, ha nincs hozzá rögzített részvétel. Részvételek mellett a törlés és az
+elmaradtnak jelölés is 409-es konfliktus: előbb a névsort kell rendezni. Ez nem archiválás: a sor eltűnik az adatbázisból, nem állítható vissza.
 A létrehozó User megmarad. Az ismételt törlés és a törölt edzés lekérése 404.
 
 A `ManageTrainingSessions` actionben a szerkesztés és állapotváltás tranzakcióban
@@ -843,9 +848,10 @@ ritkábban használt beállításai a **További adatok** alatt találhatók.
 
 Az adatlapon az **Elmaradást jelzek** gombbal és opcionális indokkal jelezhető
 az elmaradás. A kézi megtartottá jelölés a **Megtartott edzés lezárása** alatt
-érhető el. **A heti edzések automatikus létrehozása és automatikus lezárása még
-nem készült el**, az külön kis megvalósítási egység lesz. Most csak az űrlap
-alapértékeit töltjük ki, nem generálunk vagy minősítünk át edzéseket a háttérben.
+érhető el kiegészítő lehetőségként. A fix heti alkalmakat az alább bemutatott
+cron-végpont tölti fel; a napi hívás a befejezett, elmaradtnak nem jelölt
+edzéseket automatikusan lezárja. A listát tehát nem szükséges hetente kézzel
+létrehozni vagy minden megtartott edzést külön lezárni.
 
 Lezárt edzésnél a szerkesztés és állapotváltás felületei eltűnnek. Ha egy korábban megnyitott
 űrlappal vagy ismételt kéréssel tiltott műveletet próbálnak végrehajtani,
@@ -869,7 +875,7 @@ A validációs hiba után megmarad az eredeti helyi űrlapérték; változatlan
 percérték visszaküldésekor a szerkesztés megőrzi a tárolt másodpercet és
 törtmásodpercet, bár ezeket az űrlap nem mutatja. A Blade-felület közvetlenül a közös actionöket
 hívó webes controllerekhez küld CSRF-védett űrlapokat, nem indít HTTP-kérést
-a saját API-jához. Nem került bele részvételi lista vagy jelentkezés.
+a saját API-jához. A részvételi lista az adatlap része, előzetes jelentkezés nincs.
 
 | Webes útvonal | Művelet |
 | --- | --- |
@@ -915,6 +921,271 @@ Valódi böngészős végigkattintás ebben az egységben nem történt.
 Hivatalos dokumentáció: [Laravel 13 Blade](https://laravel.com/framework/docs/13.x/blade),
 [FormRequest és űrlapadatok visszatöltése](https://laravel.com/framework/docs/13.x/validation).
 
+### Fix heti edzések: egy cronból hívott végpont
+
+```text
+POST /api/v1/training-sessions/sync-weekly
+```
+
+A `TrainingSessionController::syncWeekly()` a következő nyolc csütörtököt
+ellenőrzi. Ha az adott helyi napon már van edzés, annak adatait és állapotát
+megőrzi. Ha nincs, létrehoz egy tervezett **Mászóedzés** rekordot, **18:00–20:00**
+időponttal, **Fless!Buda boulder** helyszínnel. A hiányzó rekordok létrehozása
+után a tényleges befejezésükhöz elért `scheduled` edzéseket `completed` állapotba
+zárja, a meglévő közös actionnel. Az elmaradtnak jelölt edzést és az indokát
+nem módosítja. Az első verified + approved admin a létrehozó; nincs fióklétrehozás
+vagy jogosultságemelés. Az ismételt hívás a már létező napokra nem készít új rekordot.
+
+**Ennél a megoldásnál az elmaradást állapotváltással kell jelezni.** Ha egy
+jövőbeli csütörtöki rekordot mégis fizikailag törölsz vagy másik napra helyezel,
+a következő hívás újra létrehozza a megüresedett csütörtöki alkalmat. Nincs
+külön heti nyilvántartó modell/tábla, törlési kivétellista, Artisan-szinkronizáló
+parancs vagy Laravel-ütemezett feladat. `schedule:work` sem szükséges.
+A régi belső nyilvántartást a tisztító migráció távolítja el; az edzéseket megőrzi.
+
+A dátumellenőrzés, beszúrás és lezárás egy SQLite-tranzakcióban fut. A létrehozási
+és lezárási szabályokat a meglévő `ManageTrainingSessions` action kezeli.
+A JSON-válasz a létrehozott és lezárt edzések számát tartalmazza:
+
+```json
+{"data":{"created":0,"completed":0}}
+```
+
+A végpont szerver–szerver hívásra való; külön, saját titkos kulcs védi.
+A `.env` fájlban állíts be egy hosszú, véletlen `TRAINING_CRON_KEY` értéket,
+amelyet nem szabad verziókövetni. A konfigurációban a `training.cron_key` olvassa.
+Utána szükség esetén `php artisan config:clear`.
+Kulcs nélkül a végpont 503-at, hiányzó vagy hibás Authorization headerrel 401-et,
+jogosult létrehozó hiányában 422-es JSON-hibát ad. Ez nem Sanctum személyes
+API-token, a többi admin API-végpont session/policy/CSRF védelme megmaradt.
+
+Kézi próba, a saját kulcsoddal:
+
+```bash
+curl --fail --silent --show-error --request POST \
+  --header 'Authorization: Bearer SAJAT_CRON_KULCS' \
+  http://127.0.0.1:8000/api/v1/training-sessions/sync-weekly
+```
+
+Napi egyszeri cron, például a cron szerver helyi ideje szerinti **20:05-kor**:
+
+```cron
+5 20 * * * curl --fail --silent --show-error --request POST --header 'Authorization: Bearer SAJAT_CRON_KULCS' https://SAJAT_DOMAIN/api/v1/training-sessions/sync-weekly
+```
+
+A példa domainjét és kulcsát cseréld a sajátodra. A kívánt 20:05-ös helyi
+futtatáshoz a cron időzónáját is ennek megfelelően állítsd be; a cron nem az
+alkalmazás konfigurációjából veszi az időzónát. Éles környezetben HTTPS-es URL-t
+használj. A megvalósítás nem ír át szerveres crontabot vagy titkos `.env` értéket:
+a kulcs beállítása és a cronbejegyzés aktiválása telepítési lépés.
+
+Ellenőrzés:
+
+```bash
+php artisan migrate
+php artisan test --filter=WeeklyTrainingSessionsTest
+php artisan test --testsuite=Feature
+vendor/bin/pint --test
+php artisan route:list --path=sync-weekly
+```
+
+A tesztek a kulcsos védelmet, az első feltöltést és ismétlést, a kézi módosítások
+és elmaradások megőrzését, a gördülő nyolchetes ablakot, a tényleges befejezés
+utáni lezárást, az óraátállítást és a törölt nap újrafeltöltését ellenőrzik.
+A tisztító migráció tesztje igazolja, hogy az edzésadatok változatlanul megmaradnak.
+Valódi cronból indított HTTP-futás még nem történt.
+
+### Teljes összefoglaló: eltérések az eredeti TrainingSession-tervhez képest
+
+| Eredeti vagy köztes megoldás | Elkészült működés |
+| --- | --- |
+| Csak adatmodell, REST API és feature tesztek | Magyar Blade-adminfelület és cronból hívott végpont is |
+| Minden új edzés adatait kézzel kell kitölteni | Fix csütörtök 18:00–20:00 és Fless!Buda boulder alapértékek; nyolchetes automatikus pótlás |
+| Minden megtartott edzést kézzel kell lezárni | A napi futás a tényleges befejezés után automatikusan lezárja; a kézi complete is elérhető |
+| Edzésenként kötelező ár | Ár kivezetve az aktív modell/API/felület használatából, korábbi értékek megőrizve |
+| Másodpercet, eltolást tartalmazó API-időpontok | Egyszerű helyi `2026-11-05T18:00`, közös timezone-konfigurációval |
+| Külön webes dátumátalakító trait és requestek | Közös FormRequestek és actionök, beépített Laravel-validációval |
+| Csökkenő időrend | Növekvő időrend, kezdés majd azonosító szerint |
+| Nem volt törlési endpoint | Megerősített fizikai törlés, jogosult admin számára, minden állapotban |
+| Törölt/áthelyezett alkalmak külön követése a köztes változatban | Nincs külön nyilvántartás; a hiányzó csütörtök újra létrejön, elmaradást állapotváltással jelzünk |
+| API-ban explicit JSON-válaszok és szerveroldali védelem | Megmaradt; a web is a közös szabályokat hívja, a cron-végpontot külön titkos kulcs védi |
+
+A normál és Google-auth, admin/student szerepek, email-megerősítés, jóváhagyás,
+a Participant személytörzs, admin CRUD és session REST API továbbra is megvan.
+A személytörzs és az edzésenkénti Attendance-névsor külön fogalom. A manuális
+részvételkezelés elkészült; alkalomlevonást vagy bérletegyenleget még nem kezelünk. Reservation, bérletvásárlás,
+fizetés és QR funkció nem készült. Az ezekhez eddig megbeszélt díjak és hozott
+alkalmak igényeit a következő szakasz rögzíti.
+
+Hivatalos dokumentáció:
+[Laravel 13 migrációk](https://laravel.com/framework/docs/13.x/migrations).
+
+### Edzésenkénti manuális részvételi névsor
+
+Az admin edzésadatlapján a **Résztvevők (N fő)** rész mutatja az adott edzés
+névsorát és teljes létszámát. Ez tényleges részvétel rögzítése, nem jelentkezés.
+Az edzések listájában is látszik edzésenként a létszám és a résztvevők neve,
+egyszerű, vesszővel elválasztott felsorolásban.
+A `scheduled` és a `completed` edzés névsora is hozzáadható és javítható,
+utólag is. Az edzés lezárt adatai és a névsor szerkeszthetősége külön szabály.
+`cancelled` edzéshez nem lehet részvételt hozzáadni.
+
+Használat:
+
+1. **Meglévő résztvevő hozzáadása:** név szerinti keresés, szerveroldali,
+   lapozott találati lista, új frontend-csomag nélkül. Kizárólag aktív, az adott
+   edzésre még fel nem vett személyek választhatók. A név mellett a személy
+   azonosítója látszik, így azonos nevű résztvevők is külön választhatók.
+   Hozzáadás után a választó nyitva marad, és a név szerinti keresés megmarad,
+   így egymás után több személy is gyorsan felvehető.
+2. **Új vendég hozzáadása:** csak a név szükséges; nem készül User-fiók,
+   email, telefon és belső megjegyzés sem kötelező. Azonos név alapján nem
+   vonunk össze személyeket és nem választunk ki automatikusan meglévő rekordot.
+3. **Eltávolítás:** az adott név mellett egyetlen gombnyomással, külön
+   megerősítő checkbox nélkül. A meglévő résztvevők választójának nyitott vagy
+   csukott állapota és a keresés eltávolítás után megmarad. Kizárólag a részvételi sor
+   törlődik, a Participant megmarad és később ismét kiválasztható.
+
+A névsor és a választólista 20 soros oldalakat használ. A keresés részszövegre
+keres, a `%` és `_` karaktert szó szerint kezeli. A meglévő SQLite-konvenciót
+követi: ASCII betűknél kis-/nagybetűfüggetlen, ékezetes betűknél a megadott
+írásmód számít. A keresőparaméter `participant_search`, a választó oldalszáma
+`participants_page`, a névsor oldalszáma `page`; lapozáskor a szűrők megmaradnak.
+
+#### Adatmodell és közös szabályok
+
+Az `attendances` mezői: `id`, `training_session_id`, `participant_id`,
+`created_by`, `created_at`, `updated_at`, valamint egy opcionális, egyedi
+`submission_id` UUID a vendégűrlap ismételt beküldésének felismerésére.
+Az edzés–személy párt adatbázis-szintű unique korlát védi.
+A foreign key-k nem törölnek kaszkáddal részvételt: az edzés, a személy és a
+rögzítő User fizikai törlése a hivatkozás fennállásáig korlátozott.
+
+Az új vendégűrlap automatikusan kap egy küldésazonosítót; az adminnak ezt nem
+kell megadnia. A már rögzített vendég ugyanazzal az azonosítóval történő
+ismételt beküldése 409, új vendégrekord nélkül. Két külön azonosítóval küldött,
+azonos nevű vendég két külön személyt jelent. Eltávolítás utáni visszaadáskor
+a már létrehozott személyt válaszd a meglévő résztvevők közül.
+
+Az új Participant és Attendance egy tranzakcióban jön létre. Sikertelen
+részvételmentés vagy egyediségi konfliktus nem hagy fölösleges vendégrekordot.
+Meglévő személy ismételt hozzáadása 409, nem duplikáció és nem sikeres no-op.
+A rögzítő `created_by` mindig a belépett admin, beküldése validációs hiba.
+
+**Részvételekkel rendelkező edzés nem törölhető és nem jelölhető elmaradtnak.**
+Az API 409-et, a web érthető magyar hibaüzenetet ad; a felület is jelzi, hogy
+előbb a névsort kell rendezni. A műveletek nem törölnek automatikusan részvételt.
+Az ellenőrzés feltételes adatbázis-frissítéssel/törléssel, tranzakcióban történik;
+a hozzáadás szintén az aktuális állapotot ellenőrzi a tranzakción belül.
+A kézi és automatikus megtartottá jelölés megőrzi a névsort, amely utána is javítható.
+
+A Participant archiválása nem törli a korábbi részvételeit. Az Attendance
+Participant-kapcsolata az archivált személyt is betölti; neve továbbra is látszik,
+a weben Archivált jelzéssel. Új névsorba csak aktív személy vehető fel.
+A web és az API a közös `ManageAttendances` actiont és a meglévő
+`TrainingSessionPolicy` adminjogosultságait használja, új általános réteg nélkül.
+
+#### REST API
+
+Minden művelethez verified + approved admin és a meglévő Sanctum-session kell.
+Az állapotmódosító böngészős kérések CSRF-védettek. A heti cron-végpont nem
+kapott névsorkezelési jogosultságot, a részvételeket nem módosítja.
+
+| Endpoint | Sikeres válasz |
+| --- | --- |
+| GET `/api/v1/training-sessions/{trainingSession}/attendances` | 200, lapozott resource collection |
+| POST `/api/v1/training-sessions/{trainingSession}/attendances` | 201, AttendanceResource |
+| DELETE `/api/v1/training-sessions/{trainingSession}/attendances/{attendance}` | 204, üres válasz |
+
+A GET paraméterei: `per_page` 1–100, alapérték 20; `page` pozitív egész.
+A válasz `data`, `links`, `meta` mezőket tartalmaz, a teljes létszám `meta.total`.
+A lista hozzáadási sorrendben, azonosító szerint rendezett.
+
+Meglévő résztvevő POST törzse, kitalált azonosítóval:
+
+```json
+{"participant_id": 12}
+```
+
+Új vendég POST törzse:
+
+```json
+{"name": "Minta Vendég", "submission_id": "21c5516e-4598-4c01-99d8-dd45f4675132"}
+```
+
+A két forma egymást kizárja: `participant_id` és `name` egyszerre nem küldhető,
+még üres/null alternatívával sem. `submission_id` csak új vendégnél küldhető,
+ott kötelező UUID. Egy új vendégművelethez új UUID-t generálj
+(például böngészőben `crypto.randomUUID()`), ugyanazon kérés újraküldéséhez
+ugyanazt az értéket használd. A név legfeljebb 255 karakter.
+
+Példaválasz:
+
+```json
+{
+  "data": {
+    "id": 1,
+    "training_session_id": 5,
+    "participant_id": 12,
+    "participant_name": "Minta Vendég",
+    "created_by": 1,
+    "created_at": "2026-10-31T12:00:00.000000Z",
+    "updated_at": "2026-10-31T12:00:00.000000Z"
+  }
+}
+```
+
+Kizárólag ezek a mezők szerepelnek; belső notes, email, telefon, User-modell,
+auth-adat és küldésazonosító nincs a névsorválaszban. A beágyazott resource-route
+scoped bindingot használ: másik edzés részvételét megadva 404 érkezik.
+A közös eltávolító action ezt külön is ellenőrzi.
+
+Hibák: 401 nincs belépés; 403 hiányzó jogosultság; 404 hiányzó edzés/részvétel
+vagy téves edzés–részvétel párosítás; 422 hibás bemenet/archivált személy;
+409 ismételt hozzáadás, elmaradt edzéshez hozzáadás, illetve névsor melletti
+edzéstörlés/lemondás. A hibák az API-n mindig JSON-válaszok.
+A webes eltávolítás nem kér külön megerősítést; a jogosultság- és CSRF-védelem megmarad.
+
+#### Ellenőrzések
+
+```bash
+php artisan migrate
+php artisan test --filter=AttendanceTest
+php artisan test --testsuite=Feature
+vendor/bin/pint --test
+npm run build
+php artisan route:list --path=attendances
+```
+
+A tesztek ellenőrzik a külön edzésnévsorokat, hozzáadást és lapozást, új vendéget,
+ismételt beküldést, azonos nevű külön személyeket, tranzakciós visszagörgetést,
+adatbáziskorlátokat, állapotszabályokat, téves szülőedzést, archivált személy
+előzményeit, a webes keresést és a választó állapotának megőrzését, a CSRF-et és minden korlátozott
+fiókállapot hozzáférési tiltását. Külön tesztadatbázison, mintaadatokkal futnak.
+
+Kézi böngészős ellenőrzés még elvégzendő:
+
+1. Adminként nyiss meg egy tervezett edzést. Keress név szerint, adj hozzá egy
+   meglévő személyt; a névsor és létszám frissüljön, másik edzésé ne változzon.
+2. Adj hozzá új vendéget csak névvel. Két valóban külön, azonos nevű vendég
+   külön személy legyen. Azonos küldésazonosítóval API-n ismételve ne keletkezzen
+   új rekord; meglévő személy duplázása is 409-et adjon.
+3. Próbáld a névsorral rendelkező edzést törölni vagy elmaradtnak jelölni:
+   magyar konfliktusüzenet érkezzen, a névsor maradjon meg.
+4. Távolíts el téves részvételt a gombbal; a személy maradjon meg a törzsben.
+   Megtartott edzés névsorán is lehessen hozzáadni és javítani.
+5. Archiválj egy felvett személyt; a korábbi névsorban a neve maradjon látható,
+   új hozzáadás választójában ne szerepeljen. Elmaradt edzéshez ne lehessen hozzáadni.
+6. Student/pending fiókkal az adminoldal és minden attendance API-művelet legyen tiltott.
+
+Ebben az egységben nem készült `payment_type`, tartozás, alkalomlevonás,
+bérlet-, fizetés-, QR- vagy reservation-kezelés. A már egyeztetett díjak és
+hozott alkalmak változatlanul későbbi követelmények.
+
+Hivatalos dokumentáció: [Laravel 13 resource controllerek és scoped route-ok](https://laravel.com/framework/docs/13.x/controllers),
+[FormRequest-validáció](https://laravel.com/framework/docs/13.x/validation),
+[Eloquent-kapcsolatok](https://laravel.com/framework/docs/13.x/eloquent-relationships).
+
 ### Későbbi résztvevői alkalom- és díjkezelés
 
 Az edzés árának kivezetése után az alábbi üzleti igényeket külön egységben
@@ -927,8 +1198,8 @@ valósítjuk meg; ehhez most nem készültek táblák, egyenlegek vagy levonáso
 
 A résztvevőhöz a megvásárolt bérletek és a felhasználható alkalmak kapcsolódjanak,
 ne az edzéshez egyetlen kötelező ár. A hozott alkalmak pénzértéke ismeretlen,
-nem 0 Ft: ezért ezekhez nem rendelünk kitalált összeget. A későbbi részvétel és
-alkalomfelhasználás szabályait az Attendance funkcióval együtt kell kialakítani.
+nem 0 Ft: ezért ezekhez nem rendelünk kitalált összeget. Az alkalomfelhasználás
+és a részvételek elszámolásának szabályai külön későbbi egységben készülnek el.
 
 ## Adatok és titkos konfiguráció
 

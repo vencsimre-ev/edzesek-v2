@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['title', 'location', 'starts_at', 'ends_at'])]
 class TrainingSession extends Model
@@ -22,6 +23,11 @@ class TrainingSession extends Model
             'ends_at' => 'immutable_datetime',
             'status' => TrainingSessionStatus::class,
         ];
+    }
+
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class);
     }
 
     public function creator(): BelongsTo

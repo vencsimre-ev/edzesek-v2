@@ -33,7 +33,7 @@
 </details>
 <div class="table-responsive">
 <table class="table align-middle">
-    <thead><tr><th>Időpont</th><th>Állapot</th><th>Művelet</th></tr></thead>
+    <thead><tr><th>Időpont</th><th>Állapot</th><th>Résztvevők</th><th>Művelet</th></tr></thead>
     <tbody>
     @forelse($sessions as $session)
         <tr>
@@ -43,13 +43,21 @@
             </td>
             <td>{{ $session->status->label() }}</td>
             <td>
+                <div class="small fw-semibold">{{ $session->attendances->count() }} fő</div>
+                <div class="small text-secondary">
+                    @foreach($session->attendances as $attendance)
+                        {{ $attendance->participant->name }}@if(!$loop->last), @endif
+                    @endforeach
+                </div>
+            </td>
+            <td>
                 @if($session->status === \App\Enums\TrainingSessionStatus::Scheduled)
                     <a class="btn btn-outline-secondary btn-sm" href="{{ route('admin.training-sessions.show', $session) }}#cancel">Elmaradás jelzése</a>
                 @endif
             </td>
         </tr>
     @empty
-        <tr><td colspan="3">Nincs megjeleníthető edzés.</td></tr>
+        <tr><td colspan="4">Nincs megjeleníthető edzés.</td></tr>
     @endforelse
     </tbody>
 </table>

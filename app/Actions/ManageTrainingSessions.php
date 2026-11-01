@@ -7,6 +7,7 @@ use App\Models\TrainingSession;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -94,9 +95,7 @@ class ManageTrainingSessions
     public function complete(TrainingSession $trainingSession): TrainingSession
     {
         return DB::transaction(function () use ($trainingSession) {
-            TrainingSession::query()->whereKey($trainingSession->id)
-                ->where('status', TrainingSessionStatus::Scheduled)
-                ->where('ends_at', '<=', now()->utc()->format('Y-m-d H:i:s.u'))
+            $this->completable()->whereKey($trainingSession->id)
                 ->update(['status' => TrainingSessionStatus::Completed->value]);
             $current = TrainingSession::query()->findOrFail($trainingSession->id);
             if ($current->status === TrainingSessionStatus::Cancelled) {
@@ -113,9 +112,12 @@ class ManageTrainingSessions
     public function cancel(TrainingSession $trainingSession, ?string $reason = null): TrainingSession
     {
         return DB::transaction(function () use ($trainingSession, $reason) {
-            TrainingSession::query()->whereKey($trainingSession->id)->where('status', TrainingSessionStatus::Scheduled)
+            TrainingSession::query()->whereKey($trainingSession->id)->where('status', TrainingSessionStatus::Scheduled)->whereDoesntHave('attendances')
                 ->update(['status' => TrainingSessionStatus::Cancelled->value, 'cancellation_reason' => $reason]);
             $current = TrainingSession::query()->findOrFail($trainingSession->id);
+            if ($current->attendances()->exists()) {
+                throw new ConflictHttpException('Az edzéshez részvételek tartoznak. Elmaradás jelzése előtt rendezd a névsort.');
+            }
             if ($current->status === TrainingSessionStatus::Completed) {
                 throw new ConflictHttpException('Megtartott edzés nem jelölhető elmaradtnak.');
             }
@@ -127,8 +129,25 @@ class ManageTrainingSessions
     public function delete(TrainingSession $trainingSession): void
     {
         DB::transaction(function () use ($trainingSession) {
-            abort_unless(TrainingSession::query()->whereKey($trainingSession->id)->delete(), 404);
+            $deleted = TrainingSession::query()->whereKey($trainingSession->id)->whereDoesntHave('attendances')->delete();
+            if (! $deleted) {
+                TrainingSession::query()->findOrFail($trainingSession->id);
+                throw new ConflictHttpException('Az edzéshez részvételek tartoznak. Törlés előtt rendezd a névsort.');
+            }
         }, 5);
+    }
+
+    public function completeDue(): int
+    {
+        return DB::transaction(fn () => $this->completable()->update([
+            'status' => TrainingSessionStatus::Completed->value,
+        ]), 5);
+    }
+
+    private function completable(): Builder
+    {
+        return TrainingSession::query()->where('status', TrainingSessionStatus::Scheduled)
+            ->where('ends_at', '<=', now()->utc()->format('Y-m-d H:i:s.u'));
     }
 
     private function normalizeDates(array $data, ?TrainingSession $current = null): array

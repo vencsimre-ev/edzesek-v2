@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\ApprovalController;
+use App\Http\Controllers\Web\AttendanceController;
 use App\Http\Controllers\Web\GoogleAuthController;
 use App\Http\Controllers\Web\LinkParticipantUserController;
 use App\Http\Controllers\Web\ParticipantController;
@@ -21,6 +22,8 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::view('/home', 'home')->name('home');
 
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::resource('training-sessions.attendances', AttendanceController::class)
+            ->parameters(['training-sessions' => 'trainingSession'])->scoped()->only(['store', 'destroy']);
         Route::resource('training-sessions', TrainingSessionController::class)
             ->parameters(['training-sessions' => 'trainingSession'])
             ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);

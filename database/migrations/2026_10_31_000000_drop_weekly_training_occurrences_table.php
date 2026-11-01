@@ -1,0 +1,24 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        // Only the retired internal tracking is removed; training_sessions stays intact.
+        Schema::dropIfExists('weekly_training_occurrences');
+    }
+
+    public function down(): void
+    {
+        Schema::create('weekly_training_occurrences', function (Blueprint $table) {
+            $table->id();
+            $table->date('scheduled_on')->unique();
+            $table->foreignId('training_session_id')->nullable()->constrained()->nullOnDelete();
+            $table->timestamps();
+        });
+    }
+};

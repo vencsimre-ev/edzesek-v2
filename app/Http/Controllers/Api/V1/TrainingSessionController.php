@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\ManageTrainingSessions;
+use App\Enums\ApprovalStatus;
+use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelTrainingSessionRequest;
 use App\Http\Requests\CompleteTrainingSessionRequest;
@@ -11,12 +13,51 @@ use App\Http\Requests\StoreTrainingSessionRequest;
 use App\Http\Requests\UpdateTrainingSessionRequest;
 use App\Http\Resources\TrainingSessionResource;
 use App\Models\TrainingSession;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 class TrainingSessionController extends Controller
 {
+    public function syncWeekly(Request $request, ManageTrainingSessions $sessions): JsonResponse
+    {
+        $key = config('training.cron_key');
+        abort_unless(is_string($key) && $key !== '', 503, 'A cron kulcsa nincs beállítva.');
+        abort_unless(hash_equals($key, $request->bearerToken() ?? ''), 401, 'Érvénytelen cron kulcs.');
+
+        $admin = User::query()->where('role', Role::Admin)->where('approval_status', ApprovalStatus::Approved)
+            ->whereNotNull('email_verified_at')->orderBy('id')->first();
+        abort_unless($admin, 422, 'Az automatikus létrehozáshoz megerősített, jóváhagyott admin szükséges.');
+
+        $counts = DB::transaction(function () use ($sessions, $admin) {
+            $defaults = $sessions->defaults();
+            $first = $defaults->starts_at->setTimezone(config('training.timezone'));
+            $created = 0;
+            for ($week = 0; $week < 8; $week++) {
+                $start = $first->addWeeks($week);
+                $day = $start->startOfDay();
+                if (TrainingSession::query()->where('starts_at', '>=', $day->utc()->format('Y-m-d H:i:s.u'))
+                    ->where('starts_at', '<', $day->addDay()->utc()->format('Y-m-d H:i:s.u'))->exists()) {
+                    continue;
+                }
+                $sessions->create([
+                    'title' => $defaults->title, 'location' => $defaults->location,
+                    'starts_at' => $start->format('Y-m-d\TH:i'),
+                    'ends_at' => $start->addHours(2)->format('Y-m-d\TH:i'),
+                ], $admin);
+                $created++;
+            }
+
+            return ['created' => $created, 'completed' => $sessions->completeDue()];
+        }, 5);
+
+        return response()->json(['data' => $counts]);
+    }
+
     public function index(ListTrainingSessionsRequest $request, ManageTrainingSessions $sessions): AnonymousResourceCollection
     {
         return TrainingSessionResource::collection($sessions->paginate($request->validated()));
