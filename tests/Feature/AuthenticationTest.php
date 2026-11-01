@@ -38,6 +38,18 @@ class AuthenticationTest extends TestCase
         ]);
     }
 
+    public function test_public_name_is_read_from_configuration_in_pages_and_emails(): void
+    {
+        config(['app.public_name' => 'Minta Mászóedzések']);
+        foreach (['/', '/login', '/register', '/edzesre-jottem'] as $url) {
+            $this->get($url)->assertOk()->assertSee('Minta Mászóedzések')->assertDontSee('iMi edzései');
+        }
+        $user = User::factory()->approved()->create();
+        foreach ([new AccountApproved, new UserAwaitingApproval($user), new VerifyEmail, new ResetPassword('sample-token')] as $notification) {
+            $this->assertSame('Minta Mászóedzések', $notification->toMail($user)->salutation);
+        }
+    }
+
     public function test_registration_cannot_set_privileged_attributes(): void
     {
         $this->post('/register', [
@@ -45,7 +57,7 @@ class AuthenticationTest extends TestCase
             'password' => 'test-password', 'password_confirmation' => 'test-password',
             'role' => 'admin', 'approval_status' => 'approved',
             'email_verified_at' => now(), 'approved_at' => now(), 'approved_by' => 1,
-        ])->assertRedirect('/home');
+        ])->assertRedirect('/');
 
         $user = User::sole();
         $this->assertNotNull($user->created_at);
@@ -75,7 +87,7 @@ class AuthenticationTest extends TestCase
 
     public function test_guests_cannot_access_protected_routes(): void
     {
-        $this->get('/home')->assertRedirect('/login');
+        $this->get('/admin/participants')->assertRedirect('/login');
         $this->get('/admin/approvals')->assertRedirect('/login');
         $this->get('/approval-pending')->assertRedirect('/login');
     }
@@ -83,7 +95,7 @@ class AuthenticationTest extends TestCase
     public function test_unverified_users_can_only_use_verification_and_logout_auth_flows(): void
     {
         $user = User::factory()->unverified()->create();
-        $this->actingAs($user)->get('/home')->assertRedirect(route('verification.notice'));
+        $this->actingAs($user)->get('/edzesre-jottem')->assertRedirect(route('verification.notice'));
         $this->get('/approval-pending')->assertRedirect(route('verification.notice'));
         $this->get('/admin/approvals')->assertRedirect(route('verification.notice'));
         $this->patch('/admin/approvals/'.$user->id)->assertRedirect(route('verification.notice'));
@@ -99,7 +111,7 @@ class AuthenticationTest extends TestCase
     public function test_verified_pending_user_cannot_access_application_or_admin_actions(): void
     {
         $user = User::factory()->create();
-        $this->actingAs($user)->get('/home')->assertRedirect(route('approval.pending'));
+        $this->actingAs($user)->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
         $this->get('/approval-pending')->assertOk()->assertSee('admin jóváhagyásra vár');
         $this->get('/admin/approvals')->assertRedirect(route('approval.pending'));
         $this->patch('/admin/approvals/'.$user->id)->assertRedirect(route('approval.pending'));
@@ -107,12 +119,12 @@ class AuthenticationTest extends TestCase
         $this->assertSame(ApprovalStatus::Pending, $user->fresh()->approval_status);
     }
 
-    public function test_verified_approved_student_can_access_home_but_not_admin_routes(): void
+    public function test_verified_approved_student_can_access_public_page_but_not_admin_routes(): void
     {
         $user = User::factory()->approved()->create();
         $pending = User::factory()->create();
-        $this->actingAs($user)->get('/home')->assertOk()->assertSee($user->name);
-        $this->get('/approval-pending')->assertRedirect(route('home'));
+        $this->actingAs($user)->get('/')->assertOk()->assertSee($user->name);
+        $this->get('/approval-pending')->assertRedirect(route('welcome'));
         $this->get('/admin/approvals')->assertForbidden();
         $this->patch('/admin/approvals/'.$pending->id)->assertForbidden();
         $this->assertSame(ApprovalStatus::Pending, $pending->fresh()->approval_status);
@@ -122,7 +134,7 @@ class AuthenticationTest extends TestCase
     public function test_approved_but_unverified_user_is_still_restricted(): void
     {
         $user = User::factory()->approved()->unverified()->create();
-        $this->actingAs($user)->get('/home')->assertRedirect(route('verification.notice'));
+        $this->actingAs($user)->get('/edzesre-jottem')->assertRedirect(route('verification.notice'));
     }
 
     public function test_pending_or_unverified_admin_is_restricted(): void
@@ -141,7 +153,7 @@ class AuthenticationTest extends TestCase
         $inactiveAdmin = User::factory()->admin()->unverified()->create();
         $student = User::factory()->unverified()->create();
         $url = $this->verificationUrl($student);
-        $this->actingAs($student)->get($url)->assertRedirect('/home?verified=1');
+        $this->actingAs($student)->get($url)->assertRedirect('/?verified=1');
         $this->assertTrue($student->fresh()->hasVerifiedEmail());
         $this->assertSame(ApprovalStatus::Pending, $student->fresh()->approval_status);
         Notification::assertSentTo($admin, UserAwaitingApproval::class,
@@ -149,7 +161,7 @@ class AuthenticationTest extends TestCase
         Notification::assertNotSentTo($inactiveAdmin, UserAwaitingApproval::class);
         $this->get($url)->assertRedirect();
         Notification::assertSentToTimes($admin, UserAwaitingApproval::class, 1);
-        $this->get('/home')->assertRedirect(route('approval.pending'));
+        $this->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
     }
 
     public function test_invalid_expired_or_wrong_user_verification_links_are_rejected(): void
@@ -240,11 +252,11 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->approved()->create();
         $this->post('/login', ['email' => $user->email, 'password' => 'password', 'remember' => 1])
-            ->assertRedirect('/home')->assertCookie(Auth::guard()->getRecallerName());
+            ->assertRedirect('/')->assertCookie(Auth::guard()->getRecallerName());
         $this->assertAuthenticatedAs($user);
         $this->post('/logout')->assertRedirect('/');
         $this->assertGuest();
-        $this->get('/home')->assertRedirect('/login');
+        $this->get('/admin/participants')->assertRedirect('/login');
         for ($i = 0; $i < 5; $i++) {
             $this->post('/login', ['email' => 'wrong@example.test', 'password' => 'wrong'])->assertSessionHasErrors('email');
         }
@@ -257,7 +269,7 @@ class AuthenticationTest extends TestCase
         $guard = Auth::guard();
         $cookie = $guard->getRecallerName();
         $this->withCookie($cookie, $user->id.'|'.$user->remember_token.'|'.$user->password)
-            ->get('/home')->assertRedirect(route('approval.pending'));
+            ->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
         $this->assertAuthenticatedAs($user);
     }
 
@@ -284,8 +296,8 @@ class AuthenticationTest extends TestCase
             'email' => $user->email, 'token' => $token,
             'password' => 'new-password', 'password_confirmation' => 'new-password',
         ])->assertSessionHasErrors('email');
-        $this->post('/login', ['email' => $user->email, 'password' => 'new-password'])->assertRedirect('/home');
-        $this->get('/home')->assertRedirect(route('approval.pending'));
+        $this->post('/login', ['email' => $user->email, 'password' => 'new-password'])->assertRedirect('/');
+        $this->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
     }
 
     public function test_invalid_and_expired_password_reset_tokens_are_rejected(): void
@@ -403,7 +415,7 @@ class AuthenticationTest extends TestCase
         }
         $this->assertStringContainsString('/email/verify/'.$user->id, $messages[0]->actionUrl);
         $this->assertStringContainsString('/reset-password/sample-reset-token', $messages[1]->actionUrl);
-        $this->assertSame(route('home'), $messages[2]->actionUrl);
+        $this->assertSame(route('welcome'), $messages[2]->actionUrl);
         $this->assertSame(route('admin.approvals.index'), $messages[3]->actionUrl);
     }
 }

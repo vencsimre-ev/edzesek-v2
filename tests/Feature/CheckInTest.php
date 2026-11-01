@@ -244,6 +244,77 @@ class CheckInTest extends TestCase
         $this->assertDatabaseCount('participants', 2);
     }
 
+    public function test_own_withdrawal_keeps_history_is_idempotent_and_changes_active_counts(): void
+    {
+        $session = $this->training('2026-11-12 18:00', '2026-11-12 20:00');
+        $student = $this->student();
+        $student->participant->update(['name' => 'Visszavont Minta Résztvevő']);
+        $payload = ['training_session_id' => $session->id];
+        $this->actingAs($student, 'web');
+        $this->postJson('/api/v1/check-ins', $payload)->assertCreated();
+        $attendance = Attendance::sole();
+        $createdAt = $attendance->created_at;
+        $page = '/edzesre-jottem?training_session_id='.$session->id;
+        $this->get($page)->assertOk()->assertSee('Mégsem veszek részt');
+        $this->post('/edzesre-jottem/visszavonas', $payload)->assertRedirect($page)->assertSessionHasNoErrors();
+        $withdrawnAt = $attendance->fresh()->withdrawn_at;
+        $this->assertNotNull($withdrawnAt);
+        $this->assertTrue($createdAt->equalTo($attendance->fresh()->created_at));
+        $this->get($page)->assertSee('visszavontad a részvételedet')->assertDontSee('Mégsem veszek részt');
+        $this->travel(1)->seconds();
+        $this->postJson('/api/v1/check-ins/withdraw', $payload)->assertOk()->assertJsonPath('data.withdrawn_at', $withdrawnAt->toISOString());
+        $this->postJson('/api/v1/check-ins', $payload)->assertOk()->assertJsonPath('data.withdrawn_at', $withdrawnAt->toISOString());
+        $this->assertDatabaseCount('attendances', 1);
+        $this->assertDatabaseCount('participants', 1);
+
+        $this->actingAs($this->admin, 'web');
+        $this->get('/admin/training-sessions/'.$session->id)->assertOk()->assertSee('Résztvevők (0 fő)')
+            ->assertSee('Visszavonva:')->assertSee('Visszavont Minta Résztvevő');
+        $this->get('/admin/training-sessions')->assertOk()->assertSee('0 fő')->assertDontSee('Visszavont Minta Résztvevő');
+        $adminApi = '/api/v1/training-sessions/'.$session->id;
+        $this->getJson($adminApi.'/attendances')->assertOk()->assertJsonPath('data.0.withdrawn_at', $withdrawnAt->toISOString());
+        $this->deleteJson($adminApi.'/attendances/'.$attendance->id)->assertConflict();
+        $this->deleteJson($adminApi)->assertConflict();
+        $this->postJson($adminApi.'/cancel')->assertOk();
+        $this->assertDatabaseHas('attendances', ['id' => $attendance->id]);
+    }
+
+    public function test_withdrawal_is_own_only_and_available_for_completed_sessions_too(): void
+    {
+        $session = $this->training('2026-11-05 16:00', '2026-11-05 18:00', ['status' => TrainingSessionStatus::Completed]);
+        $student = $this->student();
+        $this->actingAs($student, 'web');
+        $this->postJson('/api/v1/check-ins', ['training_session_id' => $session->id])->assertCreated();
+        $other = $this->student();
+        $this->actingAs($other, 'web');
+        $this->postJson('/api/v1/check-ins/withdraw', ['training_session_id' => $session->id])->assertNotFound();
+        $this->postJson('/api/v1/check-ins/withdraw', ['training_session_id' => $session->id, 'participant_id' => $student->participant->id])
+            ->assertUnprocessable()->assertJsonValidationErrors('participant_id');
+        $this->assertNull(Attendance::sole()->withdrawn_at);
+        $this->actingAs($student, 'web');
+        $this->postJson('/api/v1/check-ins/withdraw', ['training_session_id' => $session->id])->assertOk();
+        $this->assertNotNull(Attendance::sole()->withdrawn_at);
+    }
+
+    public function test_withdrawal_requires_an_approved_verified_session_and_csrf(): void
+    {
+        $session = $this->training();
+        $payload = ['training_session_id' => $session->id];
+        $this->postJson('/api/v1/check-ins/withdraw', $payload)->assertUnauthorized();
+        $this->post('/edzesre-jottem/visszavonas', $payload)->assertRedirect(route('login'));
+        foreach ([User::factory()->create(), User::factory()->approved()->unverified()->create()] as $user) {
+            Auth::forgetGuards();
+            $this->actingAs($user, 'web');
+            $this->postJson('/api/v1/check-ins/withdraw', $payload)->assertForbidden();
+            $this->post('/edzesre-jottem/visszavonas', $payload)->assertRedirect(
+                route($user->hasVerifiedEmail() ? 'approval.pending' : 'verification.notice'));
+        }
+        $this->actingAs($this->admin, 'web');
+        $this->app['env'] = 'local';
+        $this->post('/edzesre-jottem/visszavonas', $payload)->assertStatus(419);
+        $this->postJson('/api/v1/check-ins/withdraw', $payload)->assertStatus(419);
+    }
+
     public function test_public_access_does_not_open_admin_endpoints_and_all_writes_require_csrf(): void
     {
         $session = $this->training();

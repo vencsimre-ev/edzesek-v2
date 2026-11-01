@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Résztvevő adatai | Edzések v2')
+@section('title', 'Résztvevő adatai | '.config('app.public_name'))
 @section('content')
 <h1 class="h3 mb-4">{{ $participant->exists ? 'Résztvevő szerkesztése' : 'Új vendég résztvevő' }}</h1>
 <p>A résztvevő adatai különállóak; a bejelentkezési fiók adatai és jogosultságai nem változnak.</p>

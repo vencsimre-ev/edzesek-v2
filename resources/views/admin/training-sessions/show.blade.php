@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Edzés részletei | Edzések v2')
+@section('title', 'Edzés részletei | '.config('app.public_name'))
 @section('content')
 <h1 class="h3 mb-4">{{ $trainingSession->title }}</h1>
 <dl class="row">
@@ -18,7 +18,7 @@
     <a class="btn btn-outline-secondary" href="{{ route('admin.training-sessions.index') }}">Vissza a listához</a>
 </div>
 <section id="attendances" class="mb-4 border-top pt-4">
-    <h2 class="h5">Résztvevők ({{ $attendances->total() }} fő)</h2>
+    <h2 class="h5">Résztvevők ({{ $activeAttendanceCount }} fő)</h2>
     <ul class="list-group mb-3">
         @forelse($attendances as $attendance)
             <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3">
@@ -31,12 +31,16 @@
                         @endif
                     </span>
                 </span>
-                <form method="POST" action="{{ route('admin.training-sessions.attendances.destroy', [$trainingSession, $attendance]) }}" data-attendance-remove>
-                    @csrf @method('DELETE')
-                    <input type="hidden" name="participant_picker_open" value="{{ session('participant_picker_open', $participantSearch !== '' || $errors->any()) ? '1' : '0' }}">
-                    <input type="hidden" name="participant_search" value="{{ $participantSearch }}">
-                    <button class="btn btn-outline-danger btn-sm">Részvétel eltávolítása</button>
-                </form>
+                @if($attendance->withdrawn_at)
+                    <span class="small text-secondary">Visszavonva: {{ $attendance->withdrawn_at->setTimezone(config('training.timezone'))->format('Y. m. d. H:i') }}</span>
+                @else
+                    <form method="POST" action="{{ route('admin.training-sessions.attendances.destroy', [$trainingSession, $attendance]) }}" data-attendance-remove>
+                        @csrf @method('DELETE')
+                        <input type="hidden" name="participant_picker_open" value="{{ session('participant_picker_open', $participantSearch !== '' || $errors->any()) ? '1' : '0' }}">
+                        <input type="hidden" name="participant_search" value="{{ $participantSearch }}">
+                        <button class="btn btn-outline-danger btn-sm">Részvétel eltávolítása</button>
+                    </form>
+                @endif
             </li>
         @empty
             <li class="list-group-item text-secondary">Még nincs rögzített résztvevő.</li>
@@ -93,7 +97,7 @@
                 <label for="cancellation_reason" class="form-label">Indok (nem kötelező)</label>
                 <textarea id="cancellation_reason" name="cancellation_reason" class="form-control" rows="2" maxlength="2000">{{ old('cancellation_reason') }}</textarea>
             </div>
-            <button class="btn btn-outline-danger" @disabled($attendances->total() > 0)>Elmaradást jelzek</button>
+            <button class="btn btn-outline-danger" @disabled($activeAttendanceCount > 0)>Elmaradást jelzek</button>
         </form>
         <details>
             <summary class="text-secondary">Megtartott edzés lezárása</summary>
@@ -105,8 +109,11 @@
         </details>
     </div>
 @endif
+@if($activeAttendanceCount > 0)
+    <p class="text-secondary">Elmaradás jelzése előtt rendezd a névsort: aktív részvételek mellett nem végezhető el.</p>
+@endif
 @if($attendances->total() > 0)
-    <p class="text-secondary">Elmaradás jelzése vagy az edzés törlése előtt rendezd a névsort: rögzített részvételek mellett egyik művelet sem végezhető el.</p>
+    <p class="text-secondary">Az edzés a részvételi előzmények megőrzése miatt nem törölhető.</p>
 @endif
 <details class="mt-4 border-top pt-3">
     <summary class="text-secondary">Végleges törlés</summary>

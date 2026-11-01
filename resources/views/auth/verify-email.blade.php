@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Emailcím megerősítése | Edzések v2')
+@section('title', 'Emailcím megerősítése | '.config('app.public_name'))
 @section('content')
 <h1 class="h3">Erősítsd meg az emailcímedet</h1>
 <p>A folytatáshoz kattints a regisztrációkor küldött levélben lévő linkre. Ezután admin jóváhagyás szükséges.</p>

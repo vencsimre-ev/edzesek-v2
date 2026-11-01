@@ -21,6 +21,6 @@ class UserAwaitingApproval extends Notification
             ->greeting('Kedves '.$notifiable->name.'!')
             ->line($this->student->name.' ('.$this->student->email.') megerősítette az emailcímét.')
             ->action('Jóváhagyások megnyitása', route('admin.approvals.index'))
-            ->salutation('Edzések v2');
+            ->salutation(config('app.public_name'));
     }
 }

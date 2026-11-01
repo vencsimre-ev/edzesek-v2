@@ -16,6 +16,7 @@ class CheckInResource extends JsonResource
                 ->map(fn ($session) => $this->trainingData($session))),
             'name' => $this->when(array_key_exists('name', $this->resource), fn () => $this->resource['name']),
             'already_recorded' => $this->resource['already_recorded'],
+            'withdrawn_at' => $this->resource['withdrawn_at']?->toISOString(),
             'retry_after' => $this->resource['retry_after'],
             'message' => $this->resource['message'] ?? null,
         ];

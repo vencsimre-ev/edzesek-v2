@@ -13,11 +13,18 @@ class CheckInRequest extends FormRequest
     {
         $user = $this->user();
 
-        return ! $user || ($user->hasVerifiedEmail() && $user->isApproved());
+        return $user ? ($user->hasVerifiedEmail() && $user->isApproved())
+            : ! $this->routeIs('check-in.withdraw', 'api.v1.check-ins.withdraw');
     }
 
     protected function failedAuthorization(): void
     {
+        if (! $this->user()) {
+            if ($this->expectsJson()) {
+                abort(401, 'A visszavonáshoz jelentkezz be.');
+            }
+            throw new HttpResponseException(redirect()->route('login'));
+        }
         if (! $this->expectsJson()) {
             throw new HttpResponseException(redirect()->route(
                 ! $this->user()->hasVerifiedEmail() ? 'verification.notice' : 'approval.pending',
@@ -33,9 +40,10 @@ class CheckInRequest extends FormRequest
                 Rule::in(app(ManageAttendances::class)->checkInSessions()->pluck('id')->all())],
         ];
         if ($this->isMethod('POST')) {
+            $requiresGuestName = ! $this->user() && ! $this->routeIs('check-in.withdraw', 'api.v1.check-ins.withdraw');
             $rules += [
-                'name' => $this->user() ? ['missing'] : ['required', 'string', 'max:255'],
-                'submission_id' => $this->user() ? ['missing'] : ['required', 'uuid'],
+                'name' => $requiresGuestName ? ['required', 'string', 'max:255'] : ['missing'],
+                'submission_id' => $requiresGuestName ? ['required', 'uuid'] : ['missing'],
                 'participant_id' => ['missing'],
                 'user_id' => ['missing'],
                 'created_by' => ['missing'],

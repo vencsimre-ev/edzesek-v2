@@ -72,7 +72,10 @@ class ManageAttendances
     public function remove(TrainingSession $session, Attendance $attendance): void
     {
         abort_unless($attendance->training_session_id === $session->id, 404);
-        $attendance->delete();
+        if (! Attendance::query()->whereKey($attendance->id)->whereNull('withdrawn_at')->delete()) {
+            Attendance::query()->findOrFail($attendance->id);
+            throw new ConflictHttpException('A visszavont részvétel előzményként megmarad, nem törölhető.');
+        }
     }
 
     public function checkInSessions(bool $includeCancelled = false): Builder
@@ -85,18 +88,20 @@ class ManageAttendances
     public function checkInPage(?int $selectedId, ?User $user, Session $browser): array
     {
         $sessions = $this->checkInSessions()->orderBy('starts_at')->orderBy('id')->get();
-        $participant = $user?->participant()->first();
+        $participant = $user?->participant()->withTrashed()->first();
         $selected = $selectedId === null ? $this->nearestSession($sessions) : $sessions->firstWhere('id', $selectedId);
         if ($selectedId !== null && ! $selected) {
             throw ValidationException::withMessages(['training_session_id' => 'Ez az edzés most nem választható.']);
         }
 
+        $attendance = $selected && $participant ? $selected->attendances()->where('participant_id', $participant->id)->first() : null;
+
         return [
             'sessions' => $sessions,
             'selected' => $selected,
             'name' => $user?->name,
-            'already_recorded' => $selected && $participant
-                ? $selected->attendances()->where('participant_id', $participant->id)->exists() : false,
+            'already_recorded' => $attendance !== null,
+            'withdrawn_at' => $attendance?->withdrawn_at,
             'retry_after' => RateLimiter::availableIn($this->checkInKey($browser)),
         ];
     }
@@ -116,7 +121,8 @@ class ManageAttendances
                 if (! $selected) {
                     throw ValidationException::withMessages(['training_session_id' => 'Ez az edzés most nem választható.']);
                 }
-                $alreadyRecorded = $participant && $selected->attendances()->where('participant_id', $participant->id)->exists();
+                $attendance = $participant ? $selected->attendances()->where('participant_id', $participant->id)->first() : null;
+                $alreadyRecorded = $attendance !== null;
                 if (! $alreadyRecorded) {
                     $remaining = RateLimiter::availableIn($key);
                     abort_if($remaining > 0, 429, 'Új beküldés előtt várj még '.$remaining.' másodpercet.', ['Retry-After' => (string) $remaining]);
@@ -128,7 +134,7 @@ class ManageAttendances
                     ], $user);
                 }
 
-                return ['selected' => $selected, 'already_recorded' => (bool) $alreadyRecorded];
+                return ['selected' => $selected, 'already_recorded' => $alreadyRecorded, 'withdrawn_at' => $attendance?->withdrawn_at];
             }, 5);
             if (! $result['already_recorded']) {
                 RateLimiter::hit($key, 60);
@@ -136,13 +142,34 @@ class ManageAttendances
 
             return $result + [
                 'retry_after' => RateLimiter::availableIn($key),
-                'message' => $result['already_recorded']
-                    ? 'Erre az edzésre már rögzítettük a részvételedet.' : 'Rögzítettük a részvételedet.',
+                'message' => $result['withdrawn_at'] !== null ? 'Erre az edzésre visszavontad a részvételedet.' : ($result['already_recorded']
+                    ? 'Erre az edzésre már rögzítettük a részvételedet.' : 'Rögzítettük a részvételedet.'),
             ];
         });
         abort_if($result === false, 429, 'Egy beküldés már folyamatban van. Próbáld újra egy pillanat múlva.', ['Retry-After' => '1']);
 
         return $result;
+    }
+
+    public function withdraw(array $data, User $user, Session $browser): array
+    {
+        abort_unless($user->hasVerifiedEmail() && $user->isApproved(), 403);
+
+        return DB::transaction(function () use ($data, $user, $browser) {
+            $selected = $this->checkInSessions()->whereKey($data['training_session_id'])->firstOrFail();
+            $participant = $user->participant()->withTrashed()->first();
+            abort_unless($participant, 404);
+            $attendance = $selected->attendances()->where('participant_id', $participant->id)->firstOrFail();
+            $selected->attendances()->whereKey($attendance->id)->whereNull('withdrawn_at')->update(['withdrawn_at' => now()->utc()]);
+
+            return [
+                'selected' => $selected,
+                'already_recorded' => true,
+                'withdrawn_at' => Attendance::query()->findOrFail($attendance->id)->withdrawn_at,
+                'retry_after' => RateLimiter::availableIn($this->checkInKey($browser)),
+                'message' => 'Visszavontad a részvételedet. Az előzménye megmaradt.',
+            ];
+        }, 5);
     }
 
     private function nearestSession(Collection $sessions): ?TrainingSession

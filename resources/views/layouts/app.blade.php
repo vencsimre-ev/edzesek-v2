@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>@yield('title', 'Edzések v2')</title>
+    <title>@yield('title', config('app.public_name'))</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('head')
@@ -14,12 +14,27 @@
     <header class="bg-dark text-white">
         <div class="container py-3 d-flex flex-wrap gap-3 justify-content-between align-items-center">
             <a href="{{ url('/') }}" class="text-white text-decoration-none fs-4">
-                Edzések v2
+                {{ config('app.public_name') }}
             </a>
-            <nav aria-label="Fő navigáció" class="d-flex gap-3 align-items-center">
+            <nav aria-label="Fő navigáció" class="d-flex flex-wrap gap-3 align-items-center">
                 <a href="{{ route('check-in.index') }}" class="text-white">Edzésre jöttem</a>
                 @auth
-                    <a href="{{ route('home') }}" class="text-white">Kezdőoldal</a>
+                    @if(auth()->user()->isAdmin() && auth()->user()->hasVerifiedEmail() && auth()->user()->isApproved())
+                        <div class="dropdown">
+                            <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Adminisztráció</button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{{ route('admin.training-sessions.index') }}">Edzések</a></li>
+                                <li><a class="dropdown-item" href="{{ route('admin.participants.index') }}">Résztvevők</a></li>
+                                <li><a class="dropdown-item" href="{{ route('admin.approvals.index') }}">Jóváhagyások</a></li>
+                            </ul>
+                        </div>
+                    @endif
+                    @if(! auth()->user()->hasVerifiedEmail())
+                        <a href="{{ route('verification.notice') }}" class="text-white">Email-megerősítés</a>
+                    @elseif(! auth()->user()->isApproved())
+                        <a href="{{ route('approval.pending') }}" class="text-white">Jóváhagyásra vár</a>
+                    @endif
+                    <span class="small">{{ auth()->user()->name }}</span>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="btn btn-outline-light btn-sm">Kijelentkezés</button>

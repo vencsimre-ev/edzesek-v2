@@ -9,7 +9,7 @@ return [
     'username' => 'email',
     'email' => 'email',
     'lowercase_usernames' => true,
-    'home' => '/home',
+    'home' => '/',
     'prefix' => '',
     'domain' => null,
     'middleware' => ['web', RestrictUnapprovedAccount::class],

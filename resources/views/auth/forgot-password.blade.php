@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Elfelejtett jelszó | Edzések v2')
+@section('title', 'Elfelejtett jelszó | '.config('app.public_name'))
 @section('content')
 <div class="row justify-content-center"><div class="col-md-6 col-lg-5">
     <h1 class="h3 mb-4">Elfelejtett jelszó</h1>

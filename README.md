@@ -1,4 +1,4 @@
-# Edzések v2
+# iMi edzései
 
 Mászóedzések, résztvevők, részvételek, bérletalkalmak és manuálisan
 rögzített befizetések kezelésére készülő webalkalmazás.
@@ -179,8 +179,26 @@ Az admin adatait te adod meg; a megvalósítás nem hozott létre helyi admint.
 | Nincs belépve | Regisztráció, belépés, elfelejtett jelszó és visszaállítás |
 | Nem megerősített email | Megerősítő oldal, megerősítés, újraküldés, kijelentkezés |
 | Megerősített, pending | Jóváhagyásra váró oldal, kijelentkezés |
-| Megerősített, approved student | Védett kezdőoldal (`/home`) |
-| Megerősített, approved admin | Védett kezdőoldal, jóváhagyások (`/admin/approvals`) és résztvevők (`/admin/participants`) |
+| Megerősített, approved student | Saját részvétel (`/edzesre-jottem`) |
+| Megerősített, approved admin | Saját részvétel, jóváhagyások (`/admin/approvals`) és résztvevők (`/admin/participants`) |
+
+A megjelenített alkalmazásnevet az `APP_PUBLIC_NAME` környezeti változó adja
+a `config/app.php` `public_name` beállításán keresztül. Alapértéke **iMi edzései**.
+A fejléc, minden oldalcím és a levelek aláírása `config('app.public_name')`
+értéket használ; névváltáskor egyetlen helyen kell beállítani, például:
+
+```dotenv
+APP_PUBLIC_NAME="Mászóklub edzései"
+```
+
+Konfigurációs cache esetén utána `php artisan config:clear` szükséges.
+Az `APP_NAME` a meglévő technikai alkalmazásnév maradhat; a publikus név
+átírása nem változtatja meg a session cookie és cache kulcsok előtagját. Nincs külön belépett kezdőoldal
+vagy `/home` útvonal. Belépés, regisztráció és Google-belépés után a publikus
+`/` főoldal a cél; az email-megerősítés és jóváhagyás a részvétel és az admin
+műveletek előtt továbbra is kötelező. A fejléc jelzi a hiányzó megerősítést vagy
+jóváhagyást. A Google-fiók összekapcsolása jóváhagyott, megerősített fióknál
+a publikus főoldalon, pending fióknál továbbra is a várakozó oldalon elérhető.
 
 A nyilvános kezdőlap minden állapotban elérhető. A PHP backed enumok:
 `Role` (`admin`, `student`) és `ApprovalStatus` (`pending`, `approved`).
@@ -227,14 +245,14 @@ rate limiteket, CSRF-et és az adminparancsot ellenőrzik.
 Kézi böngészős ellenőrzés a helyi szerver és Mailpit mellett:
 
 1. Hozz létre admint a fenti paranccsal, majd egy másik böngészőprofilban
-   regisztrálj kitalált studentadatokkal. A `/home` a megerősítő oldalra vigyen.
+   regisztrálj kitalált studentadatokkal. Az `/edzesre-jottem` a megerősítő oldalra vigyen.
 2. A Mailpitben nyisd meg a megerősítő levelet, kattints a linkre ugyanabban
-   a studentprofilban. A jóváhagyásra váró oldal jelenjen meg, az adminnak
+   a studentprofilban. A főoldalon a jóváhagyásra váró állapot látszódjon, az adminnak
    érkezzen értesítés. Próbáld ki a levél újraküldését is külön regisztrációval.
 3. Adminként lépj be a `/admin/approvals` oldalra. A megerősített pending
    student szerepeljen, a nem megerősített fiók ne. Hagyd jóvá a studentet.
 4. Ellenőrizd a jóváhagyási levelet a Mailpitben; a student már érje el a
-   `/home` oldalt. Az admin URL-je és PATCH művelete studentként legyen tiltott.
+   `/edzesre-jottem` oldalt. Az admin URL-je és PATCH művelete studentként legyen tiltott.
 5. Próbáld ki a kijelentkezést, a Remember me belépést, az elfelejtett jelszót
    és a visszaállító levél linkjét. A régi jelszó ne működjön, az új működjön.
 6. Hibás vagy lejárt megerősítő link ne legyen elfogadható; már jóváhagyott
@@ -301,8 +319,8 @@ host a tényleges HTTPS-es alkalmazáscímhez igazodjon.
 
 Kézi ellenőrzés saját Google-konfigurációval:
 
-1. Új Google-emaillel regisztrálj; a pending oldalra kerülj, az admin
-   kapjon értesítést. Jóváhagyás után a következő Google-belépés érje el a `/home` oldalt.
+1. Új Google-emaillel regisztrálj; a főoldalon a jóváhagyásra váró állapot
+   jelenjen meg, az admin kapjon értesítést. Jóváhagyás után a következő Google-belépés érje el a `/edzesre-jottem` oldalt.
 2. Meglévő helyi emaillel próbálj Google-belépést: ne lépjen be automatikusan.
    Jelszavas belépés után kapcsold össze a fiókot, majd kijelentkezés után
    ellenőrizd a Google-belépést.
@@ -591,7 +609,7 @@ valódi Google- vagy böngészős ellenőrzést:
 3. Új normál regisztráció után ellenőrizd az induló résztvevőt, majd email-megerősítés
    és jóváhagyás után lépj be studentként. A résztvevő adminfelület és API legyen tiltott.
 4. Saját OAuth-konfigurációval: **új Google-regisztráció → pending → admin jóváhagyás
-   → kijelentkezés → visszatérő Google-belépés**. A `/home` legyen elérhető, és
+   → kijelentkezés → visszatérő Google-belépés**. Az `/edzesre-jottem` legyen elérhető, és
    pontosan egy résztvevő maradjon a fiókhoz.
 5. Kapcsolj vendéget még szabad student fiókhoz. Ismételd meg ugyanazt API-n;
    ne keletkezzen duplikáció. Foglalt fióknál legyen magyar webhiba, API-n 409.
@@ -1055,7 +1073,7 @@ követi: ASCII betűknél kis-/nagybetűfüggetlen, ékezetes betűknél a megad
 #### Adatmodell és közös szabályok
 
 Az `attendances` mezői: `id`, `training_session_id`, `participant_id`,
-`created_by`, `created_at`, `updated_at`, valamint egy opcionális, egyedi
+`created_by`, `created_at`, `updated_at`, a nullable `withdrawn_at`, valamint egy opcionális, egyedi
 `submission_id` UUID a vendégűrlap ismételt beküldésének felismerésére.
 Az edzés–személy párt adatbázis-szintű unique korlát védi.
 A foreign key-k nem törölnek kaszkáddal részvételt: az edzés, a személy és a
@@ -1073,9 +1091,11 @@ Meglévő személy ismételt hozzáadása 409, nem duplikáció és nem sikeres 
 Admin névsorkezelésnél a `created_by` mindig a belépett admin. Önálló
 bejelentkezésnél a saját User, vendégnél null. A mezőt a kliens nem állíthatja.
 
-**Részvételekkel rendelkező edzés nem törölhető és nem jelölhető elmaradtnak.**
+**Aktív részvételekkel rendelkező edzés nem jelölhető elmaradtnak.**
+A fizikai törlést bármilyen részvételi előzmény tiltja, a visszavont is.
 Az API 409-et, a web érthető magyar hibaüzenetet ad; a felület is jelzi, hogy
-előbb a névsort kell rendezni. A műveletek nem törölnek automatikusan részvételt.
+aktív részvételeknél előbb a névsort kell rendezni. A műveletek nem törölnek
+automatikusan részvételt vagy visszavonási előzményt.
 Az ellenőrzés feltételes adatbázis-frissítéssel/törléssel, tranzakcióban történik;
 a hozzáadás szintén az aktuális állapotot ellenőrzi a tranzakción belül.
 A kézi és automatikus megtartottá jelölés megőrzi a névsort, amely utána is javítható.
@@ -1100,7 +1120,9 @@ kapott névsorkezelési jogosultságot, a részvételeket nem módosítja.
 
 A GET paraméterei: `per_page` 1–100, alapérték 20; `page` pozitív egész.
 A válasz `data`, `links`, `meta` mezőket tartalmaz, a teljes létszám `meta.total`.
-A lista hozzáadási sorrendben, azonosító szerint rendezett.
+A lista hozzáadási sorrendben, azonosító szerint rendezett. A visszavont
+sorok is benne maradnak, `withdrawn_at` jelzéssel, ezért a `meta.total` az összes
+előzmény darabszáma. A webes létszám és az edzéslista csak a nem visszavontakat számolja.
 
 Meglévő résztvevő POST törzse, kitalált azonosítóval:
 
@@ -1130,6 +1152,7 @@ Példaválasz:
     "participant_id": 12,
     "participant_name": "Minta Vendég",
     "created_by": 1,
+    "withdrawn_at": null,
     "created_at": "2026-10-31T12:00:00.000000Z",
     "updated_at": "2026-10-31T12:00:00.000000Z"
   }
@@ -1191,8 +1214,9 @@ Hivatalos dokumentáció: [Laravel 13 resource controllerek és scoped route-ok]
 
 A `/` főoldal a megadott Fless Buda bemutatkozó oldal zöld–barack megjelenését,
 bemutatkozó szövegét, edzőfotóját, elérhetőségét és tájékoztató díjait használja.
-A fejlécben a meglévő belépés/regisztráció, belépve a kezdőoldal és kijelentkezés
-érhető el. A bemutatkozó oldal bejelentkezés és jóváhagyás nélkül is olvasható.
+A fejlécben a meglévő belépés/regisztráció, belépve a név és kijelentkezés
+érhető el. A jóváhagyott, megerősített admin az **Adminisztráció** menüből éri el
+az edzéseket, résztvevőket és jóváhagyásokat. A bemutatkozó oldal bejelentkezés és jóváhagyás nélkül is olvasható.
 
 A **Következő edzések** adatbázisból, időrendben mutatja a még be nem fejeződött
 alkalmakat a következő nyolc hétre. A dátum, időpont és helyszín az edzésrekordból
@@ -1215,7 +1239,7 @@ kártyáját használja, közös publikus Blade-layouttal. Az űrlapok működé
 
 ### Résztvevői „Edzésre jöttem” oldal
 
-A fejlécből és a belépett felhasználó kezdőoldaláról elérhető:
+A fejlécből és a főoldali edzéslistából elérhető:
 `GET /edzesre-jottem`. A korábbi Bootstrap-felület egyszerű névmezőjét és
 visszajelzését követi, Google Spreadsheet helyett a meglévő Participant és
 Attendance rekordokba ment. Az eredeti alkalmazást nem módosítja.
@@ -1240,6 +1264,15 @@ Attendance rekordokba ment. Az eredeti alkalmazást nem módosítja.
   weben a meglévő megerősítő/jóváhagyási oldalra kerül, API-n 403-at kap.
 - Siker: **Rögzítettük a részvételedet.**, az edzés dátumával. Meglévő saját
   részvételnél: **Erre az edzésre már rögzítettük a részvételedet.** Új sor nincs.
+  Saját aktív részvételnél a **Mégsem veszek részt** gombbal visszavonható a
+  rögzítés, a 60 másodperces várakozás alatt is. Az eredeti sor, létrehozási idő
+  és rögzítő megmarad; a visszavonás időpontja a `withdrawn_at` mezőbe kerül.
+  Az adminlapon **Visszavonva** jelzéssel látszik, az aktív létszámba és az
+  edzéslista névsorába nem számít bele. A visszavonás ismétlése nem módosítja
+  az eredeti visszavonási időpontot, új rekordot sem hoz létre. A visszavont sor
+  megőrzött előzmény: a részvételi POST nem aktiválja újra, az admin DELETE sem
+  törli. Ha csak visszavont előzmény van, az edzés elmaradtnak jelölhető, de
+  fizikailag nem törölhető.
 - Sikeres új mentés után ugyanannak a böngésző-sessionnek 60 másodpercig kell
   várnia, más edzés választásakor is. Látható visszaszámlálás és szerveroldali
   Laravel RateLimiter védi; a sessionben tárolt böngészőazonosítóhoz tartozó
@@ -1259,8 +1292,15 @@ backendhez nem indít HTTP API-kérést. A webes és API-controller közösen a 
 | --- | --- |
 | GET `/api/v1/check-ins` | Biztonságos edzésválasztó adatok, alapértelmezett edzés, saját állapot és hátralévő várakozás |
 | POST `/api/v1/check-ins` | Saját részvétel rögzítése: 201, már meglévő saját részvétel: 200 |
+| POST `/api/v1/check-ins/withdraw` | Belépett fiók saját részvételének visszavonása: 200, előzmény megőrzésével |
 
 GET-en opcionális `training_session_id` adható. POST-nál ez kötelező.
+Visszavonásnál csak ezt küldd; más személy azonosítója nem adható meg, a
+szerver a belépett fiók saját résztvevőjét keresi az adott edzésen. Vendégként
+a visszavonás API-n 401, weben belépési átirányítás. Nincs saját részvétel: 404.
+A webes művelet CSRF-védett POST az `/edzesre-jottem/visszavonas` címre.
+Csak a meglévő edzésválasztási időablakban, nem elmaradt edzésen érhető el;
+a `completed` edzés korábbi részvétele is visszavonható.
 Vendég POST-példa, kizárólag mintaadatokkal:
 
 ```json
@@ -1273,7 +1313,7 @@ Belépett fióknál csak `{"training_session_id": 5}` küldendő. A kliensből �
 a küldésazonosító UUID, ahogy az admin vendégfelvételnél is.
 
 A JSON explicit mezői: `training_session` (`id`, `date`, `starts_at`, `ends_at`,
-`location`), `already_recorded`, `retry_after`, `message`; GET-en emellett
+`location`), `already_recorded`, `withdrawn_at`, `retry_after`, `message`; GET-en emellett
 `training_sessions` és a saját `name` (vendégnél null). Nincs személytörzs,
 mások névsora, belső megjegyzés vagy auth-adat. Időpont: helyi `Y-m-dTH:i`.
 Nincs választható edzés esetén a kiválasztott érték null, a lista üres.
@@ -1295,6 +1335,9 @@ TrainingSession- és auth-tesztek, `vendor/bin/pint --test`, `npm run build`.
 Kézzel: vendég névvel mentése; visszaszámlálás és újratöltés; másik böngészőből
 párhuzamos mentés; belépett student saját részvétele és ismétlése; edzésváltás;
 pending/unverified fiók tiltása; adminnévsorban a mentett részvétel megjelenése.
+
+A `2026_11_01_000001_add_withdrawn_at_to_attendances_table` migráció hozzáadja
+a visszavonás időpontját, a meglévő részvételeket aktívként megőrizve.
 
 Nincs bérletlevonás, fizetés, QR, értesítő email vagy új ütemezés.
 Hivatalos háttér: [Laravel 13 session](https://laravel.com/framework/docs/13.x/session),
@@ -1325,3 +1368,5 @@ nem 0 Ft: ezért ezekhez nem rendelünk kitalált összeget. Az alkalomfelhaszn�
 - A Composer és az npm lockfájljait verziókövetjük.
 - A telepített függőségek és a generált buildfájlok nincsenek verziókövetve.
 
+
+A publikus név és dátummező Laravel-megoldásai: [konfiguráció](https://laravel.com/framework/docs/13.x/configuration#accessing-configuration-values), [dátumcasting](https://laravel.com/framework/docs/13.x/eloquent-mutators#date-casting).

@@ -14,6 +14,7 @@ return [
     */
 
     'name' => env('APP_NAME', 'Laravel'),
+    'public_name' => env('APP_PUBLIC_NAME', 'iMi edzései'),
 
     /*
     |--------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 @extends('layouts.public')
-@section('title', 'Fless!Buda mászóedzés')
+@section('title', config('app.public_name').' | Fless!Buda mászóedzés')
 @section('main-class', 'landing-page')
 @section('content')
 <div class="landing-container">
@@ -87,6 +87,11 @@
                 </p>
             </div>
         </section>
+        @auth
+            @if(auth()->user()->hasVerifiedEmail() && auth()->user()->isApproved())
+                <x-google-link />
+            @endif
+        @endauth
     </section>
     <footer>Fless Buda mászóedzés · vencsimre.ev@gmail.com</footer>
 </div>

@@ -63,7 +63,7 @@ class AttendanceTest extends TestCase
         $response = $this->postJson($this->url($training), ['participant_id' => $participant->id])->assertCreated()
             ->assertJsonPath('data.participant_name', 'Minta Résztvevő')->assertJsonPath('data.training_session_id', $training->id)
             ->assertJsonPath('data.created_by', $this->admin->id)->assertDontSee('INTERNAL_SAMPLE_NOTE');
-        $this->assertSame(['id', 'training_session_id', 'participant_id', 'participant_name', 'created_by', 'created_at', 'updated_at'],
+        $this->assertSame(['id', 'training_session_id', 'participant_id', 'participant_name', 'created_by', 'withdrawn_at', 'created_at', 'updated_at'],
             array_keys($response->json('data')));
         $attendance = Attendance::sole();
         $this->assertNotNull($attendance->created_at);

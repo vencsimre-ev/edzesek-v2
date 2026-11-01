@@ -32,7 +32,7 @@ class GoogleAuthentication
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('home')->with('message', $intent === 'login'
+        return redirect()->route('welcome')->with('message', $intent === 'login'
             ? 'Sikeres Google-belépés.' : 'A Google-fiók összekapcsolva.');
     }
 }

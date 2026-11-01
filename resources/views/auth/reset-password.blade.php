@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Jelszó visszaállítása | Edzések v2')
+@section('title', 'Jelszó visszaállítása | '.config('app.public_name'))
 @section('content')
 <div class="row justify-content-center"><div class="col-md-6 col-lg-5">
     <h1 class="h3 mb-4">Jelszó visszaállítása</h1>

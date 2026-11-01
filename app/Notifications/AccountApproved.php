@@ -17,7 +17,7 @@ class AccountApproved extends Notification
         return (new MailMessage)->subject('Fiókod jóváhagyva')
             ->greeting('Kedves '.$notifiable->name.'!')
             ->line('Az admin jóváhagyta a fiókodat. Most már használhatod az alkalmazást.')
-            ->action('Alkalmazás megnyitása', route('home'))
-            ->salutation('Edzések v2');
+            ->action('Alkalmazás megnyitása', route('welcome'))
+            ->salutation(config('app.public_name'));
     }
 }

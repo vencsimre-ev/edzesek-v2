@@ -45,4 +45,12 @@ class CheckInController extends Controller
         return $redirect->with('message', $result['message'].' '.$result['selected']->starts_at
             ->setTimezone(config('training.timezone'))->format('Y. m. d.'));
     }
+
+    public function withdraw(CheckInRequest $request, ManageAttendances $attendances): RedirectResponse
+    {
+        $result = $attendances->withdraw($request->validated(), $request->user(), $request->session());
+
+        return redirect()->route('check-in.index', ['training_session_id' => $result['selected']->id])
+            ->with('message', $result['message']);
+    }
 }

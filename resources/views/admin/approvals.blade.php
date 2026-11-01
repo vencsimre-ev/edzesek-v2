@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Admin jóváhagyások | Edzések v2')
+@section('title', 'Admin jóváhagyások | '.config('app.public_name'))
 @section('content')
 <h1 class="h3 mb-4">Jóváhagyásra váró felhasználók</h1>
 <div class="table-responsive">

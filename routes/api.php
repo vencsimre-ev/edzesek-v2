@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('web')->prefix('v1')->name('api.v1.')->group(function () {
     Route::get('/check-ins', [CheckInController::class, 'index'])->name('check-ins.index');
     Route::post('/check-ins', [CheckInController::class, 'store'])->name('check-ins.store');
+    Route::post('/check-ins/withdraw', [CheckInController::class, 'withdraw'])->name('check-ins.withdraw');
 });
 
 Route::post('/v1/training-sessions/sync-weekly', [TrainingSessionController::class, 'syncWeekly'])

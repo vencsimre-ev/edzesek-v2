@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Résztvevő részletei | Edzések v2')
+@section('title', 'Résztvevő részletei | '.config('app.public_name'))
 @section('content')
 <h1 class="h3">{{ $participant->name }}</h1>
 <dl class="row">

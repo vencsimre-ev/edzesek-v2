@@ -26,7 +26,8 @@ class TrainingSessionController extends Controller
     {
         $filters = $request->validated();
         $paginator = $sessions->paginate($filters);
-        $paginator->load(['attendances:id,training_session_id,participant_id', 'attendances.participant:id,name,deleted_at']);
+        $paginator->load(['attendances' => fn ($query) => $query->whereNull('withdrawn_at')->select(['id', 'training_session_id', 'participant_id']),
+            'attendances.participant:id,name,deleted_at']);
 
         return view('admin.training-sessions.index', [
             'sessions' => $paginator,
@@ -55,6 +56,7 @@ class TrainingSessionController extends Controller
         return view('admin.training-sessions.show', [
             'trainingSession' => $trainingSession,
             'attendances' => $attendances->paginate($trainingSession, 20, $request->integer('page', 1))->appends($filters),
+            'activeAttendanceCount' => $trainingSession->attendances()->whereNull('withdrawn_at')->count(),
             'participants' => $trainingSession->status === TrainingSessionStatus::Cancelled ? null
                 : $attendances->candidates($trainingSession, $filters['participant_search'] ?? null,
                     $request->integer('participants_page', 1))->appends($filters),

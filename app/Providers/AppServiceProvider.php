@@ -32,14 +32,14 @@ class AppServiceProvider extends ServiceProvider
             ->subject('Emailcím megerősítése')->greeting('Kedves '.$user->name.'!')
             ->line('A regisztráció folytatásához erősítsd meg az emailcímedet.')
             ->action('Emailcím megerősítése', $url)
-            ->line('Ha nem te regisztráltál, nincs teendőd.')->salutation('Edzések v2')
+            ->line('Ha nem te regisztráltál, nincs teendőd.')->salutation(config('app.public_name'))
         );
         ResetPassword::toMailUsing(fn ($user, $token) => (new MailMessage)
             ->subject('Jelszó visszaállítása')->greeting('Kedves '.$user->name.'!')
             ->line('Jelszó-visszaállítási kérést kaptunk a fiókodhoz.')
             ->action('Jelszó visszaállítása', route('password.reset', ['token' => $token, 'email' => $user->email]))
             ->line('A link '.config('auth.passwords.users.expire').' percig érvényes.')
-            ->line('Ha nem te kérted, nincs teendőd.')->salutation('Edzések v2')
+            ->line('Ha nem te kérted, nincs teendőd.')->salutation(config('app.public_name'))
         );
     }
 }

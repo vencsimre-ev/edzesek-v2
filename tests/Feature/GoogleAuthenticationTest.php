@@ -40,7 +40,7 @@ class GoogleAuthenticationTest extends TestCase
     {
         $admin = User::factory()->admin()->create();
         $this->fakeGoogle();
-        $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('home'));
+        $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('welcome'));
         $student = User::where('google_id', 'google-123')->sole();
         $this->assertSame($student->name, $student->participant->name);
         $this->assertSame($student->email, $student->participant->email);
@@ -56,10 +56,10 @@ class GoogleAuthenticationTest extends TestCase
         $this->assertStringNotContainsString('fake-token', json_encode($student->getAttributes()));
         $this->assertStringNotContainsString('fake-refresh-token', json_encode($student->getAttributes()));
         Notification::assertSentToTimes($admin, UserAwaitingApproval::class, 1);
-        $this->get('/home')->assertRedirect(route('approval.pending'));
+        $this->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
         $this->post('/logout');
         Auth::forgetGuards();
-        $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('home'));
+        $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('welcome'));
         $this->assertDatabaseCount('users', 2);
         $this->assertDatabaseCount('participants', 1);
         Notification::assertSentToTimes($admin, UserAwaitingApproval::class, 1);
@@ -69,9 +69,9 @@ class GoogleAuthenticationTest extends TestCase
     {
         $user = User::factory()->approved()->create(['google_id' => 'google-123']);
         $this->fakeGoogle();
-        $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('home'));
+        $this->withSession(['google.intent' => 'login'])->get('/auth/google/callback')->assertRedirect(route('welcome'));
         $this->assertAuthenticatedAs($user);
-        $this->get('/home')->assertOk();
+        $this->get('/')->assertOk();
         $this->assertSame($user->email, $user->fresh()->email);
         Notification::assertNothingSent();
     }
@@ -93,13 +93,13 @@ class GoogleAuthenticationTest extends TestCase
         $user = User::factory()->create(['email' => 'google@example.test']);
         $this->fakeGoogle();
         $this->actingAs($user)->post('/auth/google/link')->assertRedirect();
-        $this->get('/auth/google/callback')->assertRedirect(route('home'));
+        $this->get('/auth/google/callback')->assertRedirect(route('welcome'));
         $user->refresh();
         $this->assertSame('google-123', $user->google_id);
         $this->assertSame(Role::Student, $user->role);
         $this->assertSame(ApprovalStatus::Pending, $user->approval_status);
         $this->assertTrue(Hash::check('password', $user->password));
-        $this->get('/home')->assertRedirect(route('approval.pending'));
+        $this->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
         Notification::assertNothingSent();
     }
 

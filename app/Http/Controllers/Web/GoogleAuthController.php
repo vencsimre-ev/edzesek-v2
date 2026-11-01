@@ -33,6 +33,6 @@ class GoogleAuthController extends Controller
             $errors = $exception->errors();
         }
 
-        return redirect()->route($request->user() ? 'home' : 'login')->withErrors($errors);
+        return redirect()->route($request->user() ? 'welcome' : 'login')->withErrors($errors);
     }
 }

@@ -1,5 +1,5 @@
 @extends('layouts.public')
-@section('title', 'Edzésre jöttem | Edzések v2')
+@section('title', 'Edzésre jöttem | '.config('app.public_name'))
 @section('content')
     <div class="landing-card public-form-card mx-auto text-center">
         <span class="landing-eyebrow">Fless!Buda · mászóedzés</span>
@@ -21,7 +21,18 @@
                 </div>
             </form>
             @if($already_recorded)
-                <p class="alert alert-success">Erre az edzésre már rögzítettük a részvételedet.</p>
+                @if($withdrawn_at)
+                    <p class="alert alert-secondary">Erre az edzésre visszavontad a részvételedet. Az eredeti rögzítés megmaradt.</p>
+                @else
+                    <p class="alert alert-success">Erre az edzésre már rögzítettük a részvételedet.</p>
+                    @auth
+                        <form method="POST" action="{{ route('check-in.withdraw') }}" class="mb-4">
+                            @csrf
+                            <input type="hidden" name="training_session_id" value="{{ $selected->id }}">
+                            <button class="btn btn-outline-danger" type="submit">Mégsem veszek részt</button>
+                        </form>
+                    @endauth
+                @endif
             @endif
             <form method="POST" action="{{ route('check-in.store') }}" id="check-in-form" data-already-recorded="{{ $already_recorded ? '1' : '0' }}">
                 @csrf

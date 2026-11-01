@@ -40,9 +40,9 @@ class TrainingSessionWebTest extends TestCase
             'starts_at' => '2026-10-30 09:00:00', 'ends_at' => '2026-10-30 10:00:00'], $overrides));
     }
 
-    public function test_admin_home_links_to_training_list_and_empty_list_renders(): void
+    public function test_public_navigation_links_to_admin_training_list_and_empty_list_renders(): void
     {
-        $this->get('/home')->assertOk()->assertSee(route('admin.training-sessions.index'));
+        $this->get('/')->assertOk()->assertSee(route('admin.training-sessions.index'));
         $this->get('/admin/training-sessions')->assertOk()->assertSee('Edzések')->assertSee('Új edzés')
             ->assertSee('Nincs megjeleníthető edzés.');
         $this->get('/admin/training-sessions/create')->assertOk()->assertSee('Új edzés')->assertDontSee('budapesti idő szerint')->assertSee('Fless!Buda boulder')->assertDontSee('name="price_huf"', false);

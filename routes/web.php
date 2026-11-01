@@ -14,16 +14,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [CheckInController::class, 'welcome'])->name('welcome');
 Route::get('/edzesre-jottem', [CheckInController::class, 'index'])->name('check-in.index');
 Route::post('/edzesre-jottem', [CheckInController::class, 'store'])->name('check-in.store');
+Route::post('/edzesre-jottem/visszavonas', [CheckInController::class, 'withdraw'])->name('check-in.withdraw');
 
 Route::get('/approval-pending', function (Request $request) {
     return $request->user()->isApproved()
-        ? redirect()->route('home')
+        ? redirect()->route('welcome')
         : view('auth.pending');
 })->middleware(['auth', 'verified'])->name('approval.pending');
 
 Route::middleware(['auth', 'verified', 'approved'])->group(function () {
-    Route::view('/home', 'home')->name('home');
-
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
         Route::resource('training-sessions.attendances', AttendanceController::class)
             ->parameters(['training-sessions' => 'trainingSession'])->scoped()->only(['store', 'destroy']);

@@ -24,4 +24,9 @@ class CheckInController extends Controller
 
         return (new CheckInResource($result))->response()->setStatusCode($result['already_recorded'] ? 200 : 201);
     }
+
+    public function withdraw(CheckInRequest $request, ManageAttendances $attendances): CheckInResource
+    {
+        return new CheckInResource($attendances->withdraw($request->validated(), $request->user(), $request->session()));
+    }
 }

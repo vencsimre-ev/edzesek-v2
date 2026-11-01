@@ -15,6 +15,7 @@ class AttendanceResource extends JsonResource
             'participant_id' => $this->participant_id,
             'participant_name' => $this->participant->name,
             'created_by' => $this->created_by,
+            'withdrawn_at' => $this->withdrawn_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

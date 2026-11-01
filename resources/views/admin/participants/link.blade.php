@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Student fiók összekapcsolása | Edzések v2')
+@section('title', 'Student fiók összekapcsolása | '.config('app.public_name'))
 @section('content')
 <h1 class="h3">Fiók kapcsolása: {{ $participant->name }}</h1>
 <p>Válassz student fiókot. Foglalt fióknál hibát kapsz; automatikus összevonás nem történik. A jogosultság és a jóváhagyás nem változik.</p>

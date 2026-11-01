@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Résztvevők | Edzések v2')
+@section('title', 'Résztvevők | '.config('app.public_name'))
 @section('content')
 <div class="d-flex flex-wrap gap-3 justify-content-between mb-4">
     <h1 class="h3">Résztvevők</h1>

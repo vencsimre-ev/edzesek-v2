@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Edzés adatai | Edzések v2')
+@section('title', 'Edzés adatai | '.config('app.public_name'))
 @section('content')
 <h1 class="h3 mb-3">{{ $trainingSession->exists ? 'Edzés szerkesztése' : 'Új edzés' }}</h1>
 <p class="mb-4">{{ $trainingSession->title }} · {{ $trainingSession->location }}</p>

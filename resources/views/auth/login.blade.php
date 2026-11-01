@@ -1,5 +1,5 @@
 @extends('layouts.public')
-@section('title', 'Belépés | Edzések v2')
+@section('title', 'Belépés | '.config('app.public_name'))
 @section('content')
 <div class="landing-card public-form-card mx-auto">
     <span class="landing-eyebrow">Fless!Buda · mászóedzés</span>

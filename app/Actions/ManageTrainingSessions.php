@@ -112,10 +112,11 @@ class ManageTrainingSessions
     public function cancel(TrainingSession $trainingSession, ?string $reason = null): TrainingSession
     {
         return DB::transaction(function () use ($trainingSession, $reason) {
-            TrainingSession::query()->whereKey($trainingSession->id)->where('status', TrainingSessionStatus::Scheduled)->whereDoesntHave('attendances')
+            TrainingSession::query()->whereKey($trainingSession->id)->where('status', TrainingSessionStatus::Scheduled)
+                ->whereDoesntHave('attendances', fn ($query) => $query->whereNull('withdrawn_at'))
                 ->update(['status' => TrainingSessionStatus::Cancelled->value, 'cancellation_reason' => $reason]);
             $current = TrainingSession::query()->findOrFail($trainingSession->id);
-            if ($current->attendances()->exists()) {
+            if ($current->attendances()->whereNull('withdrawn_at')->exists()) {
                 throw new ConflictHttpException('Az edzéshez részvételek tartoznak. Elmaradás jelzése előtt rendezd a névsort.');
             }
             if ($current->status === TrainingSessionStatus::Completed) {
@@ -132,7 +133,7 @@ class ManageTrainingSessions
             $deleted = TrainingSession::query()->whereKey($trainingSession->id)->whereDoesntHave('attendances')->delete();
             if (! $deleted) {
                 TrainingSession::query()->findOrFail($trainingSession->id);
-                throw new ConflictHttpException('Az edzéshez részvételek tartoznak. Törlés előtt rendezd a névsort.');
+                throw new ConflictHttpException('Az edzéshez részvételi előzmények tartoznak, ezért nem törölhető.');
             }
         }, 5);
     }
