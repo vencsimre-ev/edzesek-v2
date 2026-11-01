@@ -6,19 +6,16 @@ use App\Actions\ManageAttendances;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckInRequest;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CheckInController extends Controller
 {
-    public function welcome(ManageAttendances $attendances): View
+    public function welcome(Request $request, ManageAttendances $attendances): View
     {
-        $sessions = $attendances->checkInSessions(includeCancelled: true)
-            ->where('ends_at', '>', now()->utc()->format('Y-m-d H:i:s.u'))
-            ->orderBy('starts_at')->orderBy('id')->get(['id', 'starts_at', 'ends_at', 'location', 'status']);
-
-        return view('welcome', compact('sessions'));
+        return view('welcome', $attendances->publicSessions($request->user()));
     }
 
     public function index(CheckInRequest $request, ManageAttendances $attendances): View

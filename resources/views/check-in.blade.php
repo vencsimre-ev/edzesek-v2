@@ -44,7 +44,7 @@
                     <div class="mb-3">
                         <label for="check-in-name" class="form-label fw-semibold">Név</label>
                         <input id="check-in-name" name="name" class="form-control" maxlength="255" autocomplete="name" required value="{{ old('name') }}">
-                        <div class="form-text">Segíts, hogy megjegyezzelek! :)</div>
+                        <div class="form-text">Segíts, hogy megjegyezzelek! (^_^)</div>
                     </div>
                 @endauth
                 <button class="btn btn-primary btn-lg" type="submit" @disabled($retry_after > 0 || $already_recorded)>Részt veszek!</button>

@@ -22,11 +22,18 @@
                             <div>
                                 <time datetime="{{ $session->starts_at->setTimezone(config('training.timezone'))->format('c') }}">{{ $session->starts_at->setTimezone(config('training.timezone'))->translatedFormat('Y. F j., l H:i') }}–{{ $session->ends_at->setTimezone(config('training.timezone'))->format('H:i') }}</time>
                                 <div class="landing-session-location">{{ $session->location }}</div>
+                                @if($ownAttendances->has($session->id))
+                                    @if($ownAttendances->get($session->id)->withdrawn_at)
+                                        <div class="small text-secondary">Részvétel visszavonva</div>
+                                    @else
+                                        <div class="small fw-semibold text-success">Résztvevőként rögzítve</div>
+                                    @endif
+                                @endif
                             </div>
                             @if($session->status === \App\Enums\TrainingSessionStatus::Cancelled)
                                 <span class="landing-cancelled">Elmarad</span>
                             @else
-                                <a class="landing-email-button" href="{{ route('check-in.index', ['training_session_id' => $session->id]) }}">Részt veszek!</a>
+                                <a class="landing-email-button" href="{{ route('check-in.index', ['training_session_id' => $session->id]) }}">{{ $ownAttendances->has($session->id) ? 'Részvételem' : 'Részt veszek!' }}</a>
                             @endif
                         </li>
                     @empty

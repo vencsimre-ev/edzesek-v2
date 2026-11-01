@@ -1218,8 +1218,9 @@ A fejlécben a meglévő belépés/regisztráció, belépve a név és kijelentk
 érhető el. A jóváhagyott, megerősített admin az **Adminisztráció** menüből éri el
 az edzéseket, résztvevőket és jóváhagyásokat. A bemutatkozó oldal bejelentkezés és jóváhagyás nélkül is olvasható.
 
-A **Következő edzések** adatbázisból, időrendben mutatja a még be nem fejeződött
-alkalmakat a következő nyolc hétre. A dátum, időpont és helyszín az edzésrekordból
+A **Következő edzések** adatbázisból, időrendben mutatja az aktuális helyi
+naptól a következő nyolc hétig kezdődő alkalmakat. A mai edzés a befejezése
+után is látszik éjfélig; másnap már nem jelenik meg a főoldali listában. A dátum, időpont és helyszín az edzésrekordból
 jön. Elmaradt edzés mellett **Elmarad** felirat látható, részvételi gomb nincs.
 Üres listánál érthető üzenet jelenik meg; nincs statikus mintadátum. A lista
 fix, nagyjából négy alkalomnyi magasságig látszik, a többi függőlegesen
@@ -1230,7 +1231,10 @@ A **Részt veszek!** gomb az adott edzés
 edzés van kiválasztva, külön kiválasztás nélkül beküldhető a meglévő űrlap.
 A kattintás önmagában nem ment részvételt. A meglévő fiókállapot-, CSRF-,
 edzésválasztási és 60 másodperces szabályok továbbra is érvényesek.
-A publikus listában névsor és belső elmaradási indok nem jelenik meg.
+Belépve a saját edzések mellett **Résztvevőként rögzítve**, visszavonás után
+**Részvétel visszavonva** jelzés látható. Ezeknél a **Részvételem** gomb nyitja
+meg a kiválasztott edzés részvételi oldalát. A publikus listában mások névsora
+és belső elmaradási indok nem jelenik meg; vendégnek saját részvételi jelzés sincs.
 
 A statikus referenciaoldal érintetlen maradt; a fotó helyi másolata
 `public/images/vencsimi.jpg`. A dizájn stílusai elkülönülnek az adminfelülettől. A belépés, regisztráció és

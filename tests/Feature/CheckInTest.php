@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\ManageAttendances;
 use App\Enums\ApprovalStatus;
 use App\Enums\TrainingSessionStatus;
 use App\Models\Attendance;
@@ -102,6 +103,42 @@ class CheckInTest extends TestCase
         $this->actingAs(User::factory()->create(), 'web');
         $this->get('/')->assertOk()->assertSee('Mászóedzések a Fless!Budában')->assertSee(route('logout'));
         $this->get('/edzesre-jottem')->assertRedirect(route('approval.pending'));
+    }
+
+    public function test_public_landing_shows_only_the_signed_in_users_own_attendance_states(): void
+    {
+        $active = $this->training('2026-11-12 18:00', '2026-11-12 20:00');
+        $withdrawn = $this->training('2026-11-19 18:00', '2026-11-19 20:00');
+        $otherSession = $this->training('2026-11-26 18:00', '2026-11-26 20:00');
+        $student = $this->student();
+        $other = $this->student();
+        $other->participant->update(['name' => 'Másik Személy Minta Neve']);
+        $attendances = app(ManageAttendances::class);
+        $attendances->add($active, ['participant_id' => $student->participant->id], $this->admin);
+        $record = $attendances->add($withdrawn, ['participant_id' => $student->participant->id], $this->admin);
+        $record->withdrawn_at = now();
+        $record->save();
+        $attendances->add($otherSession, ['participant_id' => $other->participant->id], $this->admin);
+
+        $this->actingAs($student, 'web')->get('/')->assertOk()->assertSee('Résztvevőként rögzítve')
+            ->assertSee('Részvétel visszavonva')->assertSee('Részvételem')
+            ->assertDontSee('Másik Személy Minta Neve')->assertDontSee('PRIVATE_SAMPLE_NOTE')
+            ->assertViewHas('ownAttendances', fn ($records) => $records->keys()->all() === [$active->id, $withdrawn->id]);
+        Auth::forgetGuards();
+        Auth::guard('web')->logout();
+        $this->get('/')->assertOk()->assertDontSee('Résztvevőként rögzítve')->assertDontSee('Részvétel visszavonva')
+            ->assertDontSee('Részvételem')->assertViewHas('ownAttendances', fn ($records) => $records->isEmpty());
+    }
+
+    public function test_public_landing_keeps_todays_finished_sessions_until_local_midnight(): void
+    {
+        $today = $this->training();
+        $next = $this->training('2026-11-12 18:00', '2026-11-12 20:00');
+        $this->travelTo(CarbonImmutable::parse('2026-11-05 23:59:59', 'Europe/Budapest'));
+        $this->get('/')->assertOk()->assertViewHas('sessions', fn ($sessions) => $sessions->pluck('id')->all() === [$today->id, $next->id]);
+        $this->travel(1)->seconds();
+        $this->get('/')->assertOk()->assertViewHas('sessions', fn ($sessions) => $sessions->pluck('id')->all() === [$next->id])
+            ->assertDontSee(route('check-in.index', ['training_session_id' => $today->id]));
     }
 
     public function test_nearest_start_and_later_tie_break_and_manual_selection(): void

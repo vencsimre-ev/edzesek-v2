@@ -85,6 +85,18 @@ class ManageAttendances
             ->where('starts_at', '<=', now()->addWeeks(8)->utc()->format('Y-m-d H:i:s.u'));
     }
 
+    public function publicSessions(?User $user): array
+    {
+        $sessions = $this->checkInSessions(includeCancelled: true)
+            ->where('starts_at', '>=', now(config('training.timezone'))->startOfDay()->utc()->format('Y-m-d H:i:s.u'))
+            ->orderBy('starts_at')->orderBy('id')->get(['id', 'starts_at', 'ends_at', 'location', 'status']);
+        $participant = $user?->participant()->withTrashed()->first();
+        $ownAttendances = $participant?->attendances()->whereIn('training_session_id', $sessions->modelKeys())
+            ->get(['training_session_id', 'withdrawn_at'])->keyBy('training_session_id') ?? collect();
+
+        return compact('sessions', 'ownAttendances');
+    }
+
     public function checkInPage(?int $selectedId, ?User $user, Session $browser): array
     {
         $sessions = $this->checkInSessions()->orderBy('starts_at')->orderBy('id')->get();
