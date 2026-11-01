@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Enums\AttendanceEventType;
 use App\Enums\TrainingSessionStatus;
 use App\Models\Attendance;
 use App\Models\Participant;
@@ -14,6 +15,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -23,7 +25,7 @@ class ManageAttendances
 {
     public function paginate(TrainingSession $session, int $perPage = 20, int $page = 1): LengthAwarePaginator
     {
-        return $session->attendances()->with('participant:id,name,deleted_at')
+        return $session->attendances()->with(['participant:id,name,deleted_at', 'creator:id,name', 'events.performer:id,name'])
             ->orderBy('id')->paginate($perPage, ['*'], 'page', $page);
     }
 
@@ -72,10 +74,36 @@ class ManageAttendances
     public function remove(TrainingSession $session, Attendance $attendance): void
     {
         abort_unless($attendance->training_session_id === $session->id, 404);
-        if (! Attendance::query()->whereKey($attendance->id)->whereNull('withdrawn_at')->delete()) {
+        if (! Attendance::query()->whereKey($attendance->id)->whereNull('withdrawn_at')->whereDoesntHave('events')->delete()) {
             Attendance::query()->findOrFail($attendance->id);
-            throw new ConflictHttpException('A visszavont részvétel előzményként megmarad, nem törölhető.');
+            throw new ConflictHttpException('A részvételi előzmény megmarad, nem törölhető.');
         }
+    }
+
+    public function restore(TrainingSession $session, Attendance $attendance, User $admin): Attendance
+    {
+        Gate::forUser($admin)->authorize('update', $session);
+        abort_unless($attendance->training_session_id === $session->id, 404);
+
+        return DB::transaction(function () use ($session, $attendance, $admin) {
+            $currentSession = TrainingSession::query()->findOrFail($session->id);
+            if ($currentSession->status === TrainingSessionStatus::Cancelled) {
+                throw new ConflictHttpException('Elmaradt edzésre nem állítható vissza részvétel.');
+            }
+            $current = $currentSession->attendances()->whereKey($attendance->id)->firstOrFail();
+            if ($current->withdrawn_at !== null) {
+                if ($current->participant->trashed()) {
+                    throw new ConflictHttpException('Archivált résztvevő nem állítható vissza a névsorba.');
+                }
+                $changed = $currentSession->attendances()->whereKey($current->id)->whereNotNull('withdrawn_at')
+                    ->update(['withdrawn_at' => null]);
+                if ($changed) {
+                    $current->events()->create(['type' => AttendanceEventType::Restored, 'performed_by' => $admin->id]);
+                }
+            }
+
+            return $current->fresh()->load(['participant:id,name,deleted_at', 'events.performer:id,name']);
+        }, 5);
     }
 
     public function checkInSessions(bool $includeCancelled = false): Builder
@@ -172,7 +200,10 @@ class ManageAttendances
             $participant = $user->participant()->withTrashed()->first();
             abort_unless($participant, 404);
             $attendance = $selected->attendances()->where('participant_id', $participant->id)->firstOrFail();
-            $selected->attendances()->whereKey($attendance->id)->whereNull('withdrawn_at')->update(['withdrawn_at' => now()->utc()]);
+            $changed = $selected->attendances()->whereKey($attendance->id)->whereNull('withdrawn_at')->update(['withdrawn_at' => now()->utc()]);
+            if ($changed) {
+                $attendance->events()->create(['type' => AttendanceEventType::Withdrawn, 'performed_by' => $user->id]);
+            }
 
             return [
                 'selected' => $selected,

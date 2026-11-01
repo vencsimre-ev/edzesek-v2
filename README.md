@@ -1210,6 +1210,59 @@ Hivatalos dokumentáció: [Laravel 13 resource controllerek és scoped route-ok]
 [FormRequest-validáció](https://laravel.com/framework/docs/13.x/validation),
 [Eloquent-kapcsolatok](https://laravel.com/framework/docs/13.x/eloquent-relationships).
 
+### Edzői visszaállítás és részvételi előzmények
+
+Az admin edzésadatlapján a visszavont név mellett **Visszaállítás a névsorba**
+gomb jelenik meg. Ugyanaz az Attendance rekord lesz ismét aktív:
+`withdrawn_at = null`, változatlan azonosítóval, eredeti létrehozási idővel és
+rögzítővel. Ismét beleszámít a létszámba és a főoldali saját részvételi jelzésbe.
+A **Meglévő résztvevő hozzáadása** választó állapota és keresése megmarad.
+
+- Verified + approved admin végezheti, a meglévő TrainingSessionPolicy alapján.
+- Tervezett és megtartott edzésen is működik. Elmaradt edzésnél vagy archivált
+  személy visszaállításakor 409 érkezik, a web magyar hibaüzenetet mutat.
+- Már aktív részvételnél 200 és változatlan állapot az eredmény, új esemény nélkül.
+- Másik edzéshez tartozó részvételre 404; a rögzítő személyét a kliens nem állíthatja.
+- A résztvevő újra visszavonhatja a részvételét, az edző újra visszaállíthatja.
+  Minden tényleges állapotváltás egy új előzmény, ismételt kattintás nem duplikál.
+
+Az új `attendance_events` tábla kizárólag ezeket a változásokat rögzíti:
+`id`, `attendance_id`, `type` (`withdrawn` vagy `restored`), nullable `performed_by`,
+`created_at`, `updated_at`. A típus PHP enum. A végrehajtó visszavonásnál a saját
+fiók, visszaállításnál az admin; az időpontot a szerver adja. Az állapot és
+az esemény egy tranzakcióban mentődik, hibánál mindkettő visszagördül.
+Nincs általános naplózórendszer, csomag, háttérfolyamat vagy új elszámolási réteg.
+
+A sor mellett lenyitható **Előzmények** mutatja az eredeti rögzítést, valamint
+időrendben a visszavonásokat/visszaállításokat és végrehajtójuk nevét. Az eredeti
+rögzítést az Attendance saját `created_at` és `created_by` adatai adják, ehhez
+nem készül külön esemény. Az előzményeket a felületen nem lehet módosítani
+vagy törölni. Naplózott részvétel visszaállítás után sem törölhető az admin
+DELETE végponttal; az esemény foreign key-je az adatbázisban is védi a szülőt.
+
+A migráció a már visszavont sorok ismert `withdrawn_at` idejét régi visszavonási
+eseményként átveszi. Ezek végrehajtója **Nem ismert**, mert korábban azt nem
+tároltuk; nem következtetünk rá a jelenlegi fiókkapcsolatból vagy létrehozóból.
+A meglévő Attendance sorok állapota és többi mezője változatlan marad.
+
+REST API: `POST /api/v1/training-sessions/{trainingSession}/attendances/{attendance}/restore`.
+Siker: 200, AttendanceResource. Az admin névsor GET és a restore válasza az
+`events` listát is tartalmazza, az esemény explicit `id`, `type`, `performed_by`,
+`performed_by_name`, `created_at`, `updated_at` mezőivel. A többi felhasználó
+és a publikus API nem fér hozzá a naplóhoz. Webes megfelelője ugyanilyen POST
+az `/admin/training-sessions/{trainingSession}/attendances/{attendance}/restore`
+útvonalon, session- és CSRF-védelemmel. Minden üzleti szabály a meglévő
+`ManageAttendances` actionben van, a két controller ugyanazt hívja.
+
+Ellenőrzés: `php artisan test --filter='AttendanceTest|CheckInTest'`,
+`vendor/bin/pint --test`, `npm run build`, `php artisan route:list --path=restore`.
+Kézzel: saját visszavonás → admin visszaállítás → aktív létszám/saját jelzés;
+lenyitható előzmények; ismételt visszaállítás; újabb visszavonás és visszaállítás;
+elmaradt edzés és illetéktelen fiók tiltása.
+
+Hivatalos háttér: [Laravel 13 tranzakciók](https://laravel.com/framework/docs/13.x/database#database-transactions),
+[Eloquent-kapcsolatok](https://laravel.com/framework/docs/13.x/eloquent-relationships#one-to-many).
+
 ### Publikus bemutatkozó oldal és edzéslista
 
 A `/` főoldal a megadott Fless Buda bemutatkozó oldal zöld–barack megjelenését,
@@ -1275,7 +1328,7 @@ Attendance rekordokba ment. Az eredeti alkalmazást nem módosítja.
   edzéslista névsorába nem számít bele. A visszavonás ismétlése nem módosítja
   az eredeti visszavonási időpontot, új rekordot sem hoz létre. A visszavont sor
   megőrzött előzmény: a részvételi POST nem aktiválja újra, az admin DELETE sem
-  törli. Ha csak visszavont előzmény van, az edzés elmaradtnak jelölhető, de
+  törli. Edző külön művelettel visszaállíthatja, az előzmény megőrzésével. Ha csak visszavont előzmény van, az edzés elmaradtnak jelölhető, de
   fizikailag nem törölhető.
 - Sikeres új mentés után ugyanannak a böngésző-sessionnek 60 másodpercig kell
   várnia, más edzés választásakor is. Látható visszaszámlálás és szerveroldali

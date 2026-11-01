@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Actions\ManageAttendances;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RestoreAttendanceRequest;
 use App\Http\Requests\StoreAttendanceRequest;
 use App\Http\Requests\Web\DestroyAttendanceRequest;
 use App\Models\Attendance;
@@ -38,5 +39,20 @@ class AttendanceController extends Controller
             'participant_search' => $request->validated('participant_search'),
         ])->with('participant_picker_open', $request->boolean('participant_picker_open'))
             ->with('message', 'A részvétel eltávolítva. A személy adatai megmaradtak.');
+    }
+
+    public function restore(RestoreAttendanceRequest $request, TrainingSession $trainingSession, Attendance $attendance, ManageAttendances $attendances): RedirectResponse
+    {
+        $redirect = redirect()->route('admin.training-sessions.show', [
+            'trainingSession' => $trainingSession,
+            'participant_search' => $request->validated('participant_search'),
+        ])->with('participant_picker_open', $request->boolean('participant_picker_open'));
+        try {
+            $attendances->restore($trainingSession, $attendance, $request->user());
+        } catch (ConflictHttpException $exception) {
+            return $redirect->withErrors(['attendance' => $exception->getMessage()]);
+        }
+
+        return $redirect->with('message', 'A résztvevő visszaállítva a névsorba.');
     }
 }

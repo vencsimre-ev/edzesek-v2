@@ -18,6 +18,14 @@ class AttendanceResource extends JsonResource
             'withdrawn_at' => $this->withdrawn_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
+            'events' => $this->whenLoaded('events', fn () => $this->events->map(fn ($event) => [
+                'id' => $event->id,
+                'type' => $event->type->value,
+                'performed_by' => $event->performed_by,
+                'performed_by_name' => $event->performer?->name,
+                'created_at' => $event->created_at?->toISOString(),
+                'updated_at' => $event->updated_at?->toISOString(),
+            ])),
         ];
     }
 }

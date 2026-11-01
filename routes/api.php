@@ -25,6 +25,8 @@ Route::prefix('v1')->name('api.v1.')->middleware('auth:sanctum')->group(function
     Route::middleware(['verified', 'approved', 'admin'])->group(function () {
         Route::apiResource('training-sessions.attendances', AttendanceController::class)
             ->parameters(['training-sessions' => 'trainingSession'])->scoped()->only(['index', 'store', 'destroy']);
+        Route::post('/training-sessions/{trainingSession}/attendances/{attendance}/restore', [AttendanceController::class, 'restore'])
+            ->scopeBindings()->name('training-sessions.attendances.restore');
         Route::apiResource('training-sessions', TrainingSessionController::class)
             ->parameters(['training-sessions' => 'trainingSession'])
             ->only(['index', 'store', 'show', 'update', 'destroy']);

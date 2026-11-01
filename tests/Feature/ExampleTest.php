@@ -16,7 +16,7 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200)->assertSee('iMi edzései')->assertDontSee('Kezdőoldal');
+        $response->assertStatus(200)->assertSee(config('app.public_name'))->assertDontSee('Kezdőoldal');
         $this->get('/home')->assertNotFound();
     }
 }

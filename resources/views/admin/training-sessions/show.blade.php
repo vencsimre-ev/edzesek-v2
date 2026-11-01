@@ -33,6 +33,16 @@
                 </span>
                 @if($attendance->withdrawn_at)
                     <span class="small text-secondary">Visszavonva: {{ $attendance->withdrawn_at->setTimezone(config('training.timezone'))->format('Y. m. d. H:i') }}</span>
+                    @if($trainingSession->status !== \App\Enums\TrainingSessionStatus::Cancelled && ! $attendance->participant->trashed())
+                        <form method="POST" action="{{ route('admin.training-sessions.attendances.restore', [$trainingSession, $attendance]) }}" data-attendance-restore>
+                            @csrf
+                            <input type="hidden" name="participant_picker_open" value="{{ session('participant_picker_open', $participantSearch !== '' || $errors->any()) ? '1' : '0' }}">
+                            <input type="hidden" name="participant_search" value="{{ $participantSearch }}">
+                            <button class="btn btn-outline-success btn-sm">Visszaállítás a névsorba</button>
+                        </form>
+                    @endif
+                @elseif($attendance->events->isNotEmpty())
+                    <span class="small text-secondary">Aktív részvétel, megőrzött előzményekkel.</span>
                 @else
                     <form method="POST" action="{{ route('admin.training-sessions.attendances.destroy', [$trainingSession, $attendance]) }}" data-attendance-remove>
                         @csrf @method('DELETE')
@@ -40,6 +50,17 @@
                         <input type="hidden" name="participant_search" value="{{ $participantSearch }}">
                         <button class="btn btn-outline-danger btn-sm">Részvétel eltávolítása</button>
                     </form>
+                @endif
+                @if($attendance->events->isNotEmpty())
+                    <details class="w-100 small">
+                        <summary>Előzmények</summary>
+                        <ul class="mt-2 mb-0">
+                            <li>{{ $attendance->created_at->setTimezone(config('training.timezone'))->format('Y. m. d. H:i') }} · Részvétel rögzítve · {{ $attendance->creator?->name ?? 'Vendég / nem ismert' }}</li>
+                            @foreach($attendance->events as $event)
+                                <li>{{ $event->created_at->setTimezone(config('training.timezone'))->format('Y. m. d. H:i') }} · {{ $event->type->label() }} · {{ $event->performer?->name ?? 'Nem ismert' }}</li>
+                            @endforeach
+                        </ul>
+                    </details>
                 @endif
             </li>
         @empty

@@ -26,6 +26,8 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
         Route::resource('training-sessions.attendances', AttendanceController::class)
             ->parameters(['training-sessions' => 'trainingSession'])->scoped()->only(['store', 'destroy']);
+        Route::post('/training-sessions/{trainingSession}/attendances/{attendance}/restore', [AttendanceController::class, 'restore'])
+            ->scopeBindings()->name('training-sessions.attendances.restore');
         Route::resource('training-sessions', TrainingSessionController::class)
             ->parameters(['training-sessions' => 'trainingSession'])
             ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
