@@ -1,8 +1,8 @@
-@extends('layouts.app')
+@extends('layouts.public')
 @section('title', 'Edzésre jöttem | Edzések v2')
 @section('content')
-<div class="row justify-content-center">
-    <div class="col-md-6 text-center">
+    <div class="landing-card public-form-card mx-auto text-center">
+        <span class="landing-eyebrow">Fless!Buda · mászóedzés</span>
         <h1 class="h3 mb-4">Edzésre jöttem</h1>
         @if($selected)
             <div class="mb-4">
@@ -45,5 +45,4 @@
             <p class="alert alert-info">Most nincs választható edzés. Kérj segítséget az edzőtől.</p>
         @endif
     </div>
-</div>
 @endsection

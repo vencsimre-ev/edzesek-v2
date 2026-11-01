@@ -1,12 +1,6 @@
-@extends('layouts.app')
+@extends('layouts.public')
 @section('title', 'Fless!Buda mászóedzés')
-@section('body-class', 'public-home')
 @section('main-class', 'landing-page')
-@push('head')
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
-@endpush
 @section('content')
 <div class="landing-container">
     <section class="landing-card" aria-labelledby="landing-title">
@@ -22,7 +16,7 @@
         <div class="landing-grid">
             <article class="landing-info" aria-labelledby="sessions-title">
                 <h2 class="landing-info-label" id="sessions-title">Következő edzések</h2>
-                <ul class="landing-sessions">
+                <ul class="landing-sessions" tabindex="0" aria-label="Következő edzések, görgethető lista">
                     @forelse($sessions as $session)
                         <li class="landing-session">
                             <div>

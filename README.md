@@ -1197,7 +1197,9 @@ A fejlécben a meglévő belépés/regisztráció, belépve a kezdőoldal és ki
 A **Következő edzések** adatbázisból, időrendben mutatja a még be nem fejeződött
 alkalmakat a következő nyolc hétre. A dátum, időpont és helyszín az edzésrekordból
 jön. Elmaradt edzés mellett **Elmarad** felirat látható, részvételi gomb nincs.
-Üres listánál érthető üzenet jelenik meg; nincs statikus mintadátum.
+Üres listánál érthető üzenet jelenik meg; nincs statikus mintadátum. A lista
+fix, nagyjából négy alkalomnyi magasságig látszik, a többi függőlegesen
+görgethető, billentyűzettel is. Nincs JavaScriptes magasságszámítás.
 
 A **Részt veszek!** gomb az adott edzés
 `/edzesre-jottem?training_session_id=...` oldalára visz. A lenyílóban már ez az
@@ -1207,7 +1209,9 @@ edzésválasztási és 60 másodperces szabályok továbbra is érvényesek.
 A publikus listában névsor és belső elmaradási indok nem jelenik meg.
 
 A statikus referenciaoldal érintetlen maradt; a fotó helyi másolata
-`public/images/vencsimi.jpg`. A dizájn stílusai elkülönülnek az adminfelülettől.
+`public/images/vencsimi.jpg`. A dizájn stílusai elkülönülnek az adminfelülettől. A belépés, regisztráció és
+az **Edzésre jöttem** oldal is a főoldal zöld–barack színvilágát és kerekített
+kártyáját használja, közös publikus Blade-layouttal. Az űrlapok működése változatlan.
 
 ### Résztvevői „Edzésre jöttem” oldal
 

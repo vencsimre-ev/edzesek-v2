@@ -1,11 +1,12 @@
-@extends('layouts.app')
+@extends('layouts.public')
 @section('title', 'Belépés | Edzések v2')
 @section('content')
-<div class="row justify-content-center"><div class="col-md-6 col-lg-5">
+<div class="landing-card public-form-card mx-auto">
+    <span class="landing-eyebrow">Fless!Buda · mászóedzés</span>
+    <h1 class="h3 mb-4">Belépés</h1>
     @if(config('services.google.client_id') && config('services.google.client_secret'))
         <a href="{{ route('google.redirect') }}" class="btn btn-outline-primary mb-3">Folytatás Google-fiókkal</a>
     @endif
-    <h1 class="h3 mb-4">Belépés</h1>
     <form method="POST" action="{{ route('login.store') }}">
         @csrf
         <x-auth-input name="email" label="Emailcím" type="email" autocomplete="username" />
@@ -18,5 +19,5 @@
     </form>
     <p class="mt-3"><a href="{{ route('password.request') }}">Elfelejtett jelszó</a></p>
     <p>Még nincs fiókod? <a href="{{ route('register') }}">Regisztráció</a></p>
-</div></div>
+</div>
 @endsection
