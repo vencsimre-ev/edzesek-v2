@@ -32,6 +32,7 @@ class AttendanceTest extends TestCase
     {
         parent::setUp();
         Notification::fake();
+        $this->travelTo(now(config('training.timezone'))->setTime(12, 0));
         $this->admin = User::factory()->admin()->create();
         $this->actingAs($this->admin, 'web');
         $this->withHeader('Origin', 'http://127.0.0.1:8000');
@@ -519,6 +520,80 @@ class AttendanceTest extends TestCase
         $this->post($web)->assertStatus(419);
     }
 
+    public function test_admin_can_withdraw_old_scheduled_and_completed_attendance_without_losing_history(): void
+    {
+        $initialTime = now();
+        foreach ([TrainingSessionStatus::Scheduled, TrainingSessionStatus::Completed] as $status) {
+            $this->travelTo($initialTime);
+            $training = $this->training($status);
+            $attendance = $this->withdrawnAttendance($training);
+            app(ManageAttendances::class)->restore($training, $attendance, $this->admin);
+            $createdAt = $attendance->fresh()->created_at;
+            $this->travel(12)->days();
+            $base = '/admin/training-sessions/'.$training->id;
+            $api = $this->url($training).'/'.$attendance->id.'/withdraw';
+            $this->get($base)->assertOk()->assertSee('Részvétel visszavonása');
+            $this->post($base.'/attendances/'.$attendance->id.'/withdraw', [
+                'participant_search' => 'Minta', 'participant_picker_open' => '1',
+            ])->assertRedirect($base.'?participant_search=Minta')->assertSessionHasNoErrors()
+                ->assertSessionHas('participant_picker_open', true);
+            $withdrawnAt = $attendance->fresh()->withdrawn_at;
+            $this->assertNotNull($withdrawnAt);
+            $this->assertTrue($createdAt->equalTo($attendance->fresh()->created_at));
+            $this->assertSame($this->admin->id, $attendance->fresh()->created_by);
+            $this->postJson($api)->assertOk()->assertJsonPath('data.id', $attendance->id)
+                ->assertJsonPath('data.withdrawn_at', $withdrawnAt->toISOString())
+                ->assertJsonCount(3, 'data.events')->assertJsonPath('data.events.2.type', 'withdrawn')
+                ->assertJsonPath('data.events.2.performed_by', $this->admin->id);
+            $this->assertSame(['withdrawn', 'restored', 'withdrawn'], $attendance->events()->get()->map(fn ($event) => $event->type->value)->all());
+            $this->get($base)->assertOk()->assertSee('Résztvevők (0 fő)')->assertSee('Visszaállítás a névsorba');
+            $this->postJson($this->url($training).'/'.$attendance->id.'/restore')->assertOk()->assertJsonPath('data.withdrawn_at', null);
+            $this->get($base)->assertOk()->assertSee('Résztvevők (1 fő)');
+        }
+        $this->assertDatabaseCount('attendances', 2);
+        $this->assertDatabaseCount('participants', 2);
+        $this->assertDatabaseCount('attendance_events', 8);
+    }
+
+    public function test_admin_withdrawal_requires_admin_access_correct_parent_and_csrf(): void
+    {
+        $training = $this->training();
+        $attendance = $this->add($training, $this->participant());
+        $other = $this->training();
+        $api = $this->url($training).'/'.$attendance->id.'/withdraw';
+        $web = '/admin/training-sessions/'.$training->id.'/attendances/'.$attendance->id.'/withdraw';
+        $this->postJson($this->url($other).'/'.$attendance->id.'/withdraw')->assertNotFound();
+        $this->post('/admin/training-sessions/'.$other->id.'/attendances/'.$attendance->id.'/withdraw')->assertNotFound();
+        $this->postJson($api, ['performed_by' => 999])->assertUnprocessable()->assertJsonValidationErrors('performed_by');
+        Auth::forgetGuards();
+        Auth::guard('web')->logout();
+        $this->postJson($api)->assertUnauthorized();
+        $this->post($web)->assertRedirect(route('login'));
+        foreach ([User::factory()->approved()->create(), User::factory()->admin()->unverified()->create(),
+            User::factory()->admin()->create(['approval_status' => ApprovalStatus::Pending])] as $actor) {
+            Auth::forgetGuards();
+            $this->actingAs($actor, 'web');
+            $this->postJson($api)->assertForbidden();
+            $response = $this->post($web);
+            if (! $actor->hasVerifiedEmail()) {
+                $response->assertRedirect(route('verification.notice'));
+            } elseif (! $actor->isApproved()) {
+                $response->assertRedirect(route('approval.pending'));
+            } else {
+                $response->assertForbidden();
+            }
+        }
+        $this->assertNull($attendance->fresh()->withdrawn_at);
+        $this->assertDatabaseCount('attendance_events', 0);
+        Auth::forgetGuards();
+        $this->actingAs($this->admin, 'web');
+        $this->postJson($api)->assertOk()->assertJsonCount(1, 'data.events')
+            ->assertJsonPath('data.events.0.performed_by', $this->admin->id);
+        $this->app['env'] = 'local';
+        $this->postJson($api)->assertStatus(419);
+        $this->post($web)->assertStatus(419);
+    }
+
     public function test_history_write_failure_rolls_back_withdrawal_and_restoration(): void
     {
         $training = $this->training();
@@ -541,14 +616,19 @@ class AttendanceTest extends TestCase
         $action->restore($training, $attendance, $this->admin);
         AttendanceEvent::creating(fn () => throw new \RuntimeException('Sample history write failure'));
         try {
-            try {
-                $action->withdraw(['training_session_id' => $training->id], $student, session()->driver());
-                $this->fail('Withdrawal must roll back.');
-            } catch (\RuntimeException $exception) {
-                $this->assertSame('Sample history write failure', $exception->getMessage());
+            foreach ([
+                fn () => $action->withdraw(['training_session_id' => $training->id], $student, session()->driver()),
+                fn () => $action->withdrawAsAdmin($training, $attendance, $this->admin),
+            ] as $withdraw) {
+                try {
+                    $withdraw();
+                    $this->fail('Withdrawal must roll back.');
+                } catch (\RuntimeException $exception) {
+                    $this->assertSame('Sample history write failure', $exception->getMessage());
+                }
+                $this->assertNull($attendance->fresh()->withdrawn_at);
+                $this->assertDatabaseCount('attendance_events', 2);
             }
-            $this->assertNull($attendance->fresh()->withdrawn_at);
-            $this->assertDatabaseCount('attendance_events', 2);
         } finally {
             AttendanceEvent::flushEventListeners();
         }

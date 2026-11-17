@@ -62,13 +62,14 @@ class CheckInTest extends TestCase
         $nearerStart = $this->training('2026-11-05 18:20', '2026-11-05 18:25');
         $cancelled = $this->training('2026-11-06 18:00', '2026-11-06 20:00', ['status' => TrainingSessionStatus::Cancelled]);
         $old = $this->training('2026-10-28 18:00', '2026-10-28 20:00');
+        $yesterday = $this->training('2026-11-04 18:00', '2026-11-04 20:00');
         $far = $this->training('2027-01-01 18:00', '2027-01-01 20:00');
         $response = $this->getJson('/api/v1/check-ins')->assertOk()
             ->assertJsonPath('data.training_session.id', $current->id)->assertJsonCount(2, 'data.training_sessions');
         $this->assertSame([$current->id, $nearerStart->id], array_column($response->json('data.training_sessions'), 'id'));
         $this->assertSame(['id', 'date', 'starts_at', 'ends_at', 'location'], array_keys($response->json('data.training_session')));
         $this->get('/edzesre-jottem')->assertOk()->assertSee('Edzésre jöttem')->assertSee('Fless!Buda boulder');
-        foreach ([$cancelled, $old, $far] as $invalid) {
+        foreach ([$cancelled, $old, $yesterday, $far] as $invalid) {
             $this->getJson('/api/v1/check-ins?training_session_id='.$invalid->id)->assertUnprocessable();
             $this->postJson('/api/v1/check-ins', $this->guest($invalid))->assertUnprocessable();
         }
@@ -136,7 +137,12 @@ class CheckInTest extends TestCase
         $next = $this->training('2026-11-12 18:00', '2026-11-12 20:00');
         $this->travelTo(CarbonImmutable::parse('2026-11-05 23:59:59', 'Europe/Budapest'));
         $this->get('/')->assertOk()->assertViewHas('sessions', fn ($sessions) => $sessions->pluck('id')->all() === [$today->id, $next->id]);
+        $this->get('/edzesre-jottem')->assertOk()->assertViewHas('sessions', fn ($sessions) => $sessions->pluck('id')->all() === [$today->id, $next->id]);
         $this->travel(1)->seconds();
+        $this->get('/edzesre-jottem')->assertOk()->assertViewHas('sessions', fn ($sessions) => $sessions->pluck('id')->all() === [$next->id]);
+        $this->getJson('/api/v1/check-ins')->assertOk()->assertJsonCount(1, 'data.training_sessions')->assertJsonPath('data.training_session.id', $next->id);
+        $this->getJson('/api/v1/check-ins?training_session_id='.$today->id)->assertUnprocessable();
+        $this->postJson('/api/v1/check-ins', $this->guest($today))->assertUnprocessable();
         $this->get('/')->assertOk()->assertViewHas('sessions', fn ($sessions) => $sessions->pluck('id')->all() === [$next->id])
             ->assertDontSee(route('check-in.index', ['training_session_id' => $today->id]));
     }

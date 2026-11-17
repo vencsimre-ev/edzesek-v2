@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\ManageAttendances;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ChangeAttendanceStateRequest;
 use App\Http\Requests\ListAttendancesRequest;
-use App\Http\Requests\RestoreAttendanceRequest;
 use App\Http\Requests\StoreAttendanceRequest;
 use App\Http\Resources\AttendanceResource;
 use App\Models\Attendance;
@@ -35,8 +35,13 @@ class AttendanceController extends Controller
         return response()->noContent();
     }
 
-    public function restore(RestoreAttendanceRequest $request, TrainingSession $trainingSession, Attendance $attendance, ManageAttendances $attendances): AttendanceResource
+    public function restore(ChangeAttendanceStateRequest $request, TrainingSession $trainingSession, Attendance $attendance, ManageAttendances $attendances): AttendanceResource
     {
         return new AttendanceResource($attendances->restore($trainingSession, $attendance, $request->user()));
+    }
+
+    public function withdraw(ChangeAttendanceStateRequest $request, TrainingSession $trainingSession, Attendance $attendance, ManageAttendances $attendances): AttendanceResource
+    {
+        return new AttendanceResource($attendances->withdrawAsAdmin($trainingSession, $attendance, $request->user()));
     }
 }

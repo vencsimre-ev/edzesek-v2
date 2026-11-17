@@ -28,6 +28,8 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             ->parameters(['training-sessions' => 'trainingSession'])->scoped()->only(['store', 'destroy']);
         Route::post('/training-sessions/{trainingSession}/attendances/{attendance}/restore', [AttendanceController::class, 'restore'])
             ->scopeBindings()->name('training-sessions.attendances.restore');
+        Route::post('/training-sessions/{trainingSession}/attendances/{attendance}/withdraw', [AttendanceController::class, 'withdraw'])
+            ->scopeBindings()->name('training-sessions.attendances.withdraw');
         Route::resource('training-sessions', TrainingSessionController::class)
             ->parameters(['training-sessions' => 'trainingSession'])
             ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);

@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 
-class RestoreAttendanceRequest extends FormRequest
+class ChangeAttendanceStateRequest extends FormRequest
 {
     public function authorize(): bool
     {

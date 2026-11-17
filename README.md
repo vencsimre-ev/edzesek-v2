@@ -1210,9 +1210,16 @@ Hivatalos dokumentáció: [Laravel 13 resource controllerek és scoped route-ok]
 [FormRequest-validáció](https://laravel.com/framework/docs/13.x/validation),
 [Eloquent-kapcsolatok](https://laravel.com/framework/docs/13.x/eloquent-relationships).
 
-### Edzői visszaállítás és részvételi előzmények
+### Edzői visszavonás, visszaállítás és részvételi előzmények
 
-Az admin edzésadatlapján a visszavont név mellett **Visszaállítás a névsorba**
+Az admin edzésadatlapján minden aktív részvételnél elérhető a
+**Részvétel visszavonása** gomb, korábbi visszaállítási előzmény esetén is.
+Ez régi tervezett/megtartott edzésnél is használható, dátumkorlát nélkül:
+a sor megmarad, kikerül az aktív létszámból, és a napló rögzíti az edzőt,
+valamint a visszavonás időpontját. Ismételt visszavonás nem készít új bejegyzést.
+Az edzői korrekció elmaradt edzés régi, esetleg hibásan aktív sorát is javíthatja.
+
+A visszavont név mellett **Visszaállítás a névsorba**
 gomb jelenik meg. Ugyanaz az Attendance rekord lesz ismét aktív:
 `withdrawn_at = null`, változatlan azonosítóval, eredeti létrehozási idővel és
 rögzítővel. Ismét beleszámít a létszámba és a főoldali saját részvételi jelzésbe.
@@ -1228,8 +1235,8 @@ A **Meglévő résztvevő hozzáadása** választó állapota és keresése megm
 
 Az új `attendance_events` tábla kizárólag ezeket a változásokat rögzíti:
 `id`, `attendance_id`, `type` (`withdrawn` vagy `restored`), nullable `performed_by`,
-`created_at`, `updated_at`. A típus PHP enum. A végrehajtó visszavonásnál a saját
-fiók, visszaállításnál az admin; az időpontot a szerver adja. Az állapot és
+`created_at`, `updated_at`. A típus PHP enum. A végrehajtó saját visszavonásnál
+a résztvevő fiókja, edzői visszavonásnál vagy visszaállításnál az admin; az időpontot a szerver adja. Az állapot és
 az esemény egy tranzakcióban mentődik, hibánál mindkettő visszagördül.
 Nincs általános naplózórendszer, csomag, háttérfolyamat vagy új elszámolási réteg.
 
@@ -1245,14 +1252,21 @@ eseményként átveszi. Ezek végrehajtója **Nem ismert**, mert korábban azt n
 tároltuk; nem következtetünk rá a jelenlegi fiókkapcsolatból vagy létrehozóból.
 A meglévő Attendance sorok állapota és többi mezője változatlan marad.
 
-REST API: `POST /api/v1/training-sessions/{trainingSession}/attendances/{attendance}/restore`.
-Siker: 200, AttendanceResource. Az admin névsor GET és a restore válasza az
+REST API:
+
+- `POST /api/v1/training-sessions/{trainingSession}/attendances/{attendance}/restore`
+- `POST /api/v1/training-sessions/{trainingSession}/attendances/{attendance}/withdraw`
+
+Mindkettő verified + approved admin jogosultságot igényel, az edzéshez tartozó
+sorra szűkített route bindinggal. Siker: 200, AttendanceResource. Az admin névsor GET, restore és withdraw válasza az
 `events` listát is tartalmazza, az esemény explicit `id`, `type`, `performed_by`,
 `performed_by_name`, `created_at`, `updated_at` mezőivel. A többi felhasználó
 és a publikus API nem fér hozzá a naplóhoz. Webes megfelelője ugyanilyen POST
 az `/admin/training-sessions/{trainingSession}/attendances/{attendance}/restore`
-útvonalon, session- és CSRF-védelemmel. Minden üzleti szabály a meglévő
+útvonalon, illetve ugyanott `/withdraw` végződéssel, session- és CSRF-védelemmel. Minden üzleti szabály a meglévő
 `ManageAttendances` actionben van, a két controller ugyanazt hívja.
+A közös `ChangeAttendanceStateRequest` validálja a két adminműveletet;
+a kliens nem választhat másik végrehajtót vagy személyazonosítót.
 
 Ellenőrzés: `php artisan test --filter='AttendanceTest|CheckInTest'`,
 `vendor/bin/pint --test`, `npm run build`, `php artisan route:list --path=restore`.
@@ -1302,8 +1316,11 @@ visszajelzését követi, Google Spreadsheet helyett a meglévő Participant és
 Attendance rekordokba ment. Az eredeti alkalmazást nem módosítja.
 
 - A felső részen az edzés dátuma, kezdése–befejezése és helyszíne látszik.
-- Az előző 7 nap és a következő 8 hét kezdési időpontjai közül választhatunk,
-  a határokat beleértve, elmaradt edzés nélkül. A már folyamatban lévő az
+- Az aktuális helyi naptól a következő 8 hét kezdési időpontjai közül
+  választhatunk, a határokat beleértve, elmaradt edzés nélkül. A főoldali lista,
+  a lenyíló és a publikus API ugyanazt az alsó dátumhatárt használja: tegnapi
+  edzés már nem választható, kézzel megadott azonosítóval sem. A mai alkalom
+  a befejezése után is megmarad éjfélig. A már folyamatban lévő az
   alapérték; egyébként a kezdés szerint legközelebbi, holtversenyben a későbbi.
   Másik edzés a lenyíló listából a **Kiválasztás** gombbal választható.
 - Vendégnek csak név kell: új Participant készül User-fiók nélkül. Névazonosság
@@ -1356,8 +1373,8 @@ Visszavonásnál csak ezt küldd; más személy azonosítója nem adható meg, a
 szerver a belépett fiók saját résztvevőjét keresi az adott edzésen. Vendégként
 a visszavonás API-n 401, weben belépési átirányítás. Nincs saját részvétel: 404.
 A webes művelet CSRF-védett POST az `/edzesre-jottem/visszavonas` címre.
-Csak a meglévő edzésválasztási időablakban, nem elmaradt edzésen érhető el;
-a `completed` edzés korábbi részvétele is visszavonható.
+A saját visszavonás is a publikus edzésválasztás időablakát követi; a mai
+`completed` edzés részvétele visszavonható, régebbi alkalmat edző korrigálhat.
 Vendég POST-példa, kizárólag mintaadatokkal:
 
 ```json

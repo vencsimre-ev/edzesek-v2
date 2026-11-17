@@ -41,15 +41,21 @@
                             <button class="btn btn-outline-success btn-sm">Visszaállítás a névsorba</button>
                         </form>
                     @endif
-                @elseif($attendance->events->isNotEmpty())
-                    <span class="small text-secondary">Aktív részvétel, megőrzött előzményekkel.</span>
                 @else
-                    <form method="POST" action="{{ route('admin.training-sessions.attendances.destroy', [$trainingSession, $attendance]) }}" data-attendance-remove>
-                        @csrf @method('DELETE')
+                    <form method="POST" action="{{ route('admin.training-sessions.attendances.withdraw', [$trainingSession, $attendance]) }}" data-attendance-withdraw>
+                        @csrf
                         <input type="hidden" name="participant_picker_open" value="{{ session('participant_picker_open', $participantSearch !== '' || $errors->any()) ? '1' : '0' }}">
                         <input type="hidden" name="participant_search" value="{{ $participantSearch }}">
-                        <button class="btn btn-outline-danger btn-sm">Részvétel eltávolítása</button>
+                        <button class="btn btn-outline-danger btn-sm">Részvétel visszavonása</button>
                     </form>
+                    @if($attendance->events->isEmpty())
+                        <form method="POST" action="{{ route('admin.training-sessions.attendances.destroy', [$trainingSession, $attendance]) }}" data-attendance-remove>
+                            @csrf @method('DELETE')
+                            <input type="hidden" name="participant_picker_open" value="{{ session('participant_picker_open', $participantSearch !== '' || $errors->any()) ? '1' : '0' }}">
+                            <input type="hidden" name="participant_search" value="{{ $participantSearch }}">
+                            <button class="btn btn-outline-danger btn-sm">Részvétel eltávolítása</button>
+                        </form>
+                    @endif
                 @endif
                 @if($attendance->events->isNotEmpty())
                     <details class="w-100 small">

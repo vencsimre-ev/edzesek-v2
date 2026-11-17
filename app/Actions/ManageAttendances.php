@@ -109,14 +109,13 @@ class ManageAttendances
     public function checkInSessions(bool $includeCancelled = false): Builder
     {
         return TrainingSession::query()->when(! $includeCancelled, fn ($query) => $query->where('status', '!=', TrainingSessionStatus::Cancelled))
-            ->where('starts_at', '>=', now()->subDays(7)->utc()->format('Y-m-d H:i:s.u'))
+            ->where('starts_at', '>=', now(config('training.timezone'))->startOfDay()->utc()->format('Y-m-d H:i:s.u'))
             ->where('starts_at', '<=', now()->addWeeks(8)->utc()->format('Y-m-d H:i:s.u'));
     }
 
     public function publicSessions(?User $user): array
     {
         $sessions = $this->checkInSessions(includeCancelled: true)
-            ->where('starts_at', '>=', now(config('training.timezone'))->startOfDay()->utc()->format('Y-m-d H:i:s.u'))
             ->orderBy('starts_at')->orderBy('id')->get(['id', 'starts_at', 'ends_at', 'location', 'status']);
         $participant = $user?->participant()->withTrashed()->first();
         $ownAttendances = $participant?->attendances()->whereIn('training_session_id', $sessions->modelKeys())
@@ -200,10 +199,7 @@ class ManageAttendances
             $participant = $user->participant()->withTrashed()->first();
             abort_unless($participant, 404);
             $attendance = $selected->attendances()->where('participant_id', $participant->id)->firstOrFail();
-            $changed = $selected->attendances()->whereKey($attendance->id)->whereNull('withdrawn_at')->update(['withdrawn_at' => now()->utc()]);
-            if ($changed) {
-                $attendance->events()->create(['type' => AttendanceEventType::Withdrawn, 'performed_by' => $user->id]);
-            }
+            $this->recordWithdrawal($attendance, $user);
 
             return [
                 'selected' => $selected,
@@ -213,6 +209,27 @@ class ManageAttendances
                 'message' => 'Visszavontad a részvételedet. Az előzménye megmaradt.',
             ];
         }, 5);
+    }
+
+    public function withdrawAsAdmin(TrainingSession $session, Attendance $attendance, User $admin): Attendance
+    {
+        Gate::forUser($admin)->authorize('update', $session);
+        abort_unless($attendance->training_session_id === $session->id, 404);
+
+        return DB::transaction(function () use ($session, $attendance, $admin) {
+            $current = $session->attendances()->whereKey($attendance->id)->firstOrFail();
+            $this->recordWithdrawal($current, $admin);
+
+            return $current->fresh()->load(['participant:id,name,deleted_at', 'events.performer:id,name']);
+        }, 5);
+    }
+
+    private function recordWithdrawal(Attendance $attendance, User $actor): void
+    {
+        $changed = Attendance::query()->whereKey($attendance->id)->whereNull('withdrawn_at')->update(['withdrawn_at' => now()->utc()]);
+        if ($changed) {
+            $attendance->events()->create(['type' => AttendanceEventType::Withdrawn, 'performed_by' => $actor->id]);
+        }
     }
 
     private function nearestSession(Collection $sessions): ?TrainingSession

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Actions\ManageAttendances;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\RestoreAttendanceRequest;
+use App\Http\Requests\ChangeAttendanceStateRequest;
 use App\Http\Requests\StoreAttendanceRequest;
 use App\Http\Requests\Web\DestroyAttendanceRequest;
 use App\Models\Attendance;
@@ -41,7 +41,7 @@ class AttendanceController extends Controller
             ->with('message', 'A részvétel eltávolítva. A személy adatai megmaradtak.');
     }
 
-    public function restore(RestoreAttendanceRequest $request, TrainingSession $trainingSession, Attendance $attendance, ManageAttendances $attendances): RedirectResponse
+    public function restore(ChangeAttendanceStateRequest $request, TrainingSession $trainingSession, Attendance $attendance, ManageAttendances $attendances): RedirectResponse
     {
         $redirect = redirect()->route('admin.training-sessions.show', [
             'trainingSession' => $trainingSession,
@@ -54,5 +54,16 @@ class AttendanceController extends Controller
         }
 
         return $redirect->with('message', 'A résztvevő visszaállítva a névsorba.');
+    }
+
+    public function withdraw(ChangeAttendanceStateRequest $request, TrainingSession $trainingSession, Attendance $attendance, ManageAttendances $attendances): RedirectResponse
+    {
+        $attendances->withdrawAsAdmin($trainingSession, $attendance, $request->user());
+
+        return redirect()->route('admin.training-sessions.show', [
+            'trainingSession' => $trainingSession,
+            'participant_search' => $request->validated('participant_search'),
+        ])->with('participant_picker_open', $request->boolean('participant_picker_open'))
+            ->with('message', 'A részvétel visszavonva. Az előzménye megmaradt.');
     }
 }
