@@ -1,10 +1,10 @@
 @if(config('services.google.client_id') && config('services.google.client_secret'))
     @if(auth()->user()->google_id)
-        <p class="mt-3">A Google-fiókod össze van kapcsolva.</p>
+        <span class="dropdown-item-text">A Google-fiókod össze van kapcsolva.</span>
     @else
-        <form class="mt-3" method="POST" action="{{ route('google.link') }}">
+        <form method="POST" action="{{ route('google.link') }}">
             @csrf
-            <button type="submit" class="btn btn-outline-primary">Google-fiók összekapcsolása</button>
+            <button type="submit" class="dropdown-item">Google-fiók összekapcsolása</button>
         </form>
     @endif
 @endif

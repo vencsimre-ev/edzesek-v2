@@ -34,11 +34,20 @@
                     @elseif(! auth()->user()->isApproved())
                         <a href="{{ route('approval.pending') }}" class="text-white">Jóváhagyásra vár</a>
                     @endif
-                    <span class="small">{{ auth()->user()->name }}</span>
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="btn btn-outline-light btn-sm">Kijelentkezés</button>
-                    </form>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">{{ auth()->user()->name }}</button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            @if(auth()->user()->hasVerifiedEmail())
+                                <li><x-google-link /></li>
+                            @endif
+                            <li>
+                                <form method="POST" action="{{ route('logout') }}">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item">Kijelentkezés</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
                 @else
                     <a href="{{ route('login') }}" class="text-white">Belépés</a>
                     <a href="{{ route('register') }}" class="text-white">Regisztráció</a>

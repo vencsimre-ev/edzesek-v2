@@ -197,8 +197,10 @@ Az `APP_NAME` a meglévő technikai alkalmazásnév maradhat; a publikus név
 vagy `/home` útvonal. Belépés, regisztráció és Google-belépés után a publikus
 `/` főoldal a cél; az email-megerősítés és jóváhagyás a részvétel és az admin
 műveletek előtt továbbra is kötelező. A fejléc jelzi a hiányzó megerősítést vagy
-jóváhagyást. A Google-fiók összekapcsolása jóváhagyott, megerősített fióknál
-a publikus főoldalon, pending fióknál továbbra is a várakozó oldalon elérhető.
+jóváhagyást. A Google-fiók összekapcsolása megerősített emailű fióknál
+a fejlécben, a saját névre kattintva lenyíló menüből érhető el minden oldalon,
+jóváhagyásra váró fióknál is. A menü a meglévő összekapcsolás állapotát is jelzi,
+és innen lehet kijelentkezni.
 
 A nyilvános kezdőlap minden állapotban elérhető. A PHP backed enumok:
 `Role` (`admin`, `student`) és `ApprovalStatus` (`pending`, `approved`).
@@ -217,6 +219,18 @@ a [Laravel 13 hivatalos Fortify dokumentációja](https://github.com/laravel/doc
 a további jelszómegerősítő auth route-ok is korlátozottak pending fióknál.
 A belépés email + IP szerint percenként 5 kísérletre, a megerősítő
 levelek és linkek percenként 6 kérésre korlátozottak.
+
+A Google-belépés és a „Maradjak belépve” nélküli jelszavas belépés
+munkamenete 30 nap inaktivitás után jár le (`SESSION_LIFETIME=43200`, percben).
+Minden, az alkalmazáshoz érkező munkamenetes kérés újraindítja a 30 napot;
+egy nyitva hagyott oldal önmagában nem számít aktivitásnak. A böngésző
+bezárása nem járatja le a sütit (`SESSION_EXPIRE_ON_CLOSE=false`).
+A „Maradjak belépve” külön, tartós beléptetési lehetőség marad;
+a Google-belépés nem kapcsolja be automatikusan.
+A beállítást a Laravel [session konfigurációja](https://laravel.com/framework/docs/13.x/session#configuration)
+kezeli, külön időzítő vagy saját middleware nélkül. Meglévő telepítésnél
+a `.env` `SESSION_LIFETIME` értékét is állítsd `43200`-re, majd futtasd
+a `php artisan config:clear` parancsot.
 
 Email-megerősítés után a megerősített és approved adminok levelet kapnak.
 Admin csak megerősített emailű pending fiókot hagyhat jóvá, CSRF-védett
@@ -277,7 +291,7 @@ stabil azonosítója alapján ismerjük fel; helyi nevét, emailcímét, szerep�
 
 Email-egyezés alapján nincs automatikus összekapcsolás vagy belépés.
 Meglévő fióknál előbb a saját jelszóval kell belépni és megerősíteni
-az emailcímet, majd a kezdőoldalon vagy a pending oldalon megnyomni a
+az emailcímet, majd a fejléc saját név alatti menüjében megnyomni a
 **Google-fiók összekapcsolása** gombot. Ez CSRF-védett POST műveletből
 indul. A Google és a helyi emailcímnek egyeznie kell, másik fiókhoz tartozó
 Google-azonosító nem használható, meglévő kapcsolat nem cserélhető le.

@@ -94,11 +94,6 @@
                 </p>
             </div>
         </section>
-        @auth
-            @if(auth()->user()->hasVerifiedEmail() && auth()->user()->isApproved())
-                <x-google-link />
-            @endif
-        @endauth
     </section>
     <footer>Fless Buda mászóedzés · vencsimre.ev@gmail.com</footer>
 </div>
